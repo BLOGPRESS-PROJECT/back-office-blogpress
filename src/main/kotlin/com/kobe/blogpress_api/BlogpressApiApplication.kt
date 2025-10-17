@@ -9,3 +9,5 @@ class BlogpressApiApplication
 fun main(args: Array<String>) {
 	runApplication<BlogpressApiApplication>(*args)
 }
+
+// 686 708 033
