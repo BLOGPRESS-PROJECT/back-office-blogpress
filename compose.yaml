@@ -1,13 +1,20 @@
 services:
   mongodb:
-    image: 'mongo:latest'
+    image: mongo
+    container_name: blogpress-mongodb
     environment:
-      - 'MONGO_INITDB_DATABASE=mydatabase'
-      - 'MONGO_INITDB_ROOT_PASSWORD=secret'
-      - 'MONGO_INITDB_ROOT_USERNAME=root'
+      MONGO_INITDB_DATABASE: blogpress
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: qwerty87
     ports:
-      - '27017'
-  mongodbatlas:
-    image: 'mongodb/mongodb-atlas-local:latest'
-    ports:
-      - '27017'
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongodb-data:
