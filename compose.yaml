@@ -1,6 +1,6 @@
 services:
   mongodb:
-    image: mongo
+    image: mongo:7.0
     container_name: blogpress-mongodb
     environment:
       MONGO_INITDB_DATABASE: blogpress
@@ -10,6 +10,8 @@ services:
       - "27017:27017"
     volumes:
       - mongodb-data:/data/db
+    networks:
+      - blogpress-network
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -25,7 +27,7 @@ services:
       - "8090:8090"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
-      - SPRING_DATA_MONGODB_URI=mongodb://root:qwerty87@localhost:27017/blogpress?authSource=admin
+      - SPRING_DATA_MONGODB_URI=mongodb://root:qwerty87@mongodb:27017/blogpress?authSource=admin
     depends_on:
       mongodb:
         condition: service_healthy
