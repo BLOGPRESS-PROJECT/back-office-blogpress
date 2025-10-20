@@ -25,7 +25,7 @@ services:
       - "8090:8090"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
-      - SPRING_DATA_MONGODB_URI=mongodb://root:secret@mongodb:27017/mydatabase?authSource=admin
+      - SPRING_DATA_MONGODB_URI=mongodb://root:qwerty87@localhost:27017/blogpress?authSource=admin
     depends_on:
       mongodb:
         condition: service_healthy
