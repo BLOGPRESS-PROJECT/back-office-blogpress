@@ -16,5 +16,25 @@ services:
       timeout: 5s
       retries: 5
 
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: blogpress-api-app
+    ports:
+      - "8090:8090"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_DATA_MONGODB_URI=mongodb://root:secret@mongodb:27017/mydatabase?authSource=admin
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - blogpress-network
+
 volumes:
   mongodb-data:
+
+networks:
+  blogpress-network:
+    driver: bridge
