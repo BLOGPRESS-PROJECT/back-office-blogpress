@@ -1,7 +1,7 @@
 package com.kobe.hrs.services.audit
 
-import com.kobe.hrs.database.DepartmentActivityReport
-import com.kobe.hrs.database.WeeklyActivityReport
+import com.kobe.blogpress_api.database.WeeklyActivityReport
+import com.kobe.blogpress_api.services.audit.AuditService
 import org.bson.types.ObjectId
 import org.springframework.stereotype.Service
 
@@ -52,7 +52,7 @@ class ReportGenerationService(
         return "Rapport PDF généré pour ${report.userFullName}".toByteArray()
     }
 
-    private fun generateDepartmentPDFContent(report: DepartmentActivityReport): ByteArray {
+    private fun generateDepartmentPDFContent(report: com.kobe.blogpress_api.database.DepartmentActivityReport): ByteArray {
         // Implémentation similaire pour les rapports de département
         return "Rapport département ${report.department} généré".toByteArray()
     }

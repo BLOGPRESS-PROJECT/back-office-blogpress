@@ -1,6 +1,6 @@
 package com.kobe.hrs.services.audit
 
-import com.kobe.hrs.model.audit.GeoLocation
+import com.kobe.blogpress_api.model.audit.GeoLocation
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 

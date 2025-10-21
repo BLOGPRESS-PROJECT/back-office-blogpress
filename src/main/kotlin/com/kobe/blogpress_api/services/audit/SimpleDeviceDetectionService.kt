@@ -1,6 +1,6 @@
 package com.kobe.hrs.services.audit
 
-import com.kobe.hrs.model.audit.DeviceInfo
+import com.kobe.blogpress_api.model.audit.DeviceInfo
 import org.springframework.stereotype.Service
 
 @Service
