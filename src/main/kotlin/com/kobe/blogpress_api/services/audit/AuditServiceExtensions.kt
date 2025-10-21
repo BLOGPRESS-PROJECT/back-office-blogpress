@@ -1,11 +1,11 @@
 package com.kobe.hrs.services.audit
 
-import com.kobe.hrs.dto.audit.AuditLogSummary
-import com.kobe.hrs.dto.audit.AuditSearchRequest
-import com.kobe.hrs.model.audit.AuditLog
-import com.kobe.hrs.model.users.UserSession
-import com.kobe.hrs.repository.audit.ExtendedAuditLogRepository
-import com.kobe.hrs.repository.authRep.UserSessionRepository
+import com.kobe.blogpress_api.dto.audit.AuditLogSummary
+import com.kobe.blogpress_api.dto.audit.AuditSearchRequest
+import com.kobe.blogpress_api.model.audit.AuditLog
+import com.kobe.blogpress_api.model.user.UserSession
+import com.kobe.blogpress_api.repository.audit.ExtendedAuditLogRepository
+import com.kobe.blogpress_api.repository.user.UserSessionRepository
 import org.bson.types.ObjectId
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl

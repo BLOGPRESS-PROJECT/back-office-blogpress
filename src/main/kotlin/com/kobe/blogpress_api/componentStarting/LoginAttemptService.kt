@@ -1,4 +1,4 @@
-package com.kobe.blogpress_api.startingComponents
+package com.kobe.blogpress_api.componentStarting
 
 import com.kobe.blogpress_api.model.user.DeactivationReason
 import com.kobe.blogpress_api.model.user.User

@@ -2,6 +2,9 @@ package com.kobe.blogpress_api.dto.user
 
 import com.kobe.blogpress_api.model.user.DeactivationReason
 import org.bson.types.ObjectId
+import jakarta.validation.constraints.Email
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
 import org.jetbrains.annotations.NotNull
 import org.springframework.data.annotation.Id
 import org.springframework.data.mongodb.core.mapping.Document

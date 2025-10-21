@@ -10,7 +10,7 @@ import com.kobe.blogpress_api.model.user.User
 import com.kobe.blogpress_api.repository.user.RefreshTokenRepository
 import com.kobe.blogpress_api.repository.user.UserRepository
 import com.kobe.blogpress_api.services.audit.AuditService
-import com.kobe.blogpress_api.startingComponents.LoginAttemptService
+import com.kobe.blogpress_api.componentStarting.LoginAttemptService
 import jakarta.servlet.http.HttpServletRequest
 import org.bson.types.ObjectId
 import org.springframework.http.HttpStatus
