@@ -1,82 +1,149 @@
 package com.kobe.blogpress_api.services.user
 
-import com.kobe.blogpress_api.model.user.User
+import com.kobe.blogpress_api.domain.model.user.User
+import com.kobe.blogpress_api.dto.user.UpdateProfileRequestDTO
+import com.kobe.blogpress_api.dto.user.UserDTO
+import com.kobe.blogpress_api.exception.ResourceNotFoundException
 import com.kobe.blogpress_api.repository.user.UserRepository
-import com.kobe.blogpress_api.services.audit.AuditService
 import org.bson.types.ObjectId
-import org.springframework.data.domain.Page
-import org.springframework.data.domain.Pageable
-import org.springframework.http.HttpStatus
-import org.springframework.security.core.userdetails.UsernameNotFoundException
 import org.springframework.stereotype.Service
-import org.springframework.web.server.ResponseStatusException
+import reactor.core.publisher.Mono
+import reactor.kotlin.core.util.function.component1
+import reactor.kotlin.core.util.function.component2
+import java.time.Instant
 
 @Service
 class UserService(
-    private val userRepository: UserRepository,
-    private val auditService: AuditService
+    private val userRepository: UserRepository
 ) {
 
-    /**
-     * Trouve un utilisateur par son nom d'utilisateur (email)
-     * @param username l'email de l'utilisateur
-     * @return l'utilisateur trouvé
-     * @throws UsernameNotFoundException si l'utilisateur n'est pas trouvé
-     */
-    fun findByUsername(username: String): User {
-        return userRepository.findByEmail(username)
-            ?: throw UsernameNotFoundException("Utilisateur non trouvé avec l'email : $username")
+    fun findById(userId: ObjectId): Mono<User> {
+        return userRepository.findById(userId)
+            .switchIfEmpty(Mono.error(ResourceNotFoundException("User not found with id: ${userId.toHexString()}")))
     }
 
+    fun findByUsername(username: String): Mono<User> {
+        return userRepository.findByUsername(username)
+            .switchIfEmpty(Mono.error(ResourceNotFoundException("User not found with username: $username")))
+    }
 
-    /**
-     * Supprime définitivement un utilisateur (SYSTEM_ADMIN uniquement)
-     */
-    fun deleteUser(userId: String, adminId: String): Boolean {
-        val targetUser = userRepository.findById(ObjectId(userId)).orElseThrow {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur non trouvé")
-        }
-        // Vérifier que l'utilisateur n'est pas déjà supprimé
-        if (!targetUser.isActive) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "L'utilisateur est déjà inactif")
-        }
-        // Supprimer l'utilisateur
-        userRepository.deleteById(ObjectId(userId))
+    fun updateProfile(userId: ObjectId, updateRequest: UpdateProfileRequestDTO): Mono<User> {
+        return findById(userId)
+            .flatMap { user ->
+                val updatedUser = user.copy(
+                    firstName = updateRequest.firstName ?: user.firstName,
+                    lastName = updateRequest.lastName ?: user.lastName,
+                    bio = updateRequest.bio ?: user.bio,
+                    socialLinks = updateRequest.socialLinks ?: user.socialLinks,
+                    updatedAt = Instant.now()
+                )
+                userRepository.save(updatedUser)
+            }
+    }
 
-        // Audit de suppression
-        auditService.log(
-            userId = ObjectId(adminId),
-            action = "DELETE_USER",
-            resource = "User",
-            resourceId = userId,
-            details = mapOf(
-                "targetUser" to targetUser.email,
-                "targetUserName" to "${targetUser.firstName} ${targetUser.lastName}",
-                "targetUserRole" to targetUser.roleType.name,
-                "targetUserDepartment" to targetUser.department,
-                "deletionType" to "PERMANENT_DELETE"
+    fun updateProfilePicture(userId: ObjectId, profilePictureUrl: String): Mono<User> {
+        return findById(userId)
+            .flatMap { user ->
+                val updatedUser = user.copy(
+                    profilePicture = profilePictureUrl,
+                    updatedAt = Instant.now()
+                )
+                userRepository.save(updatedUser)
+            }
+    }
+
+    fun followUser(followerId: ObjectId, followingId: ObjectId): Mono<Pair<User, User>> {
+        if (followerId == followingId) {
+            return Mono.error(IllegalArgumentException("Cannot follow yourself"))
+        }
+
+        return Mono.zip(
+            findById(followerId),
+            findById(followingId)
+        ).flatMap { (follower, following) ->
+            if (follower.following.contains(followingId)) {
+                return@flatMap Mono.error<Pair<User, User>>(
+                    IllegalStateException("Already following this user")
+                )
+            }
+
+            val updatedFollower = follower.copy(
+                following = follower.following + followingId,
+                statistics = follower.statistics.copy(
+                    followingCount = follower.statistics.followingCount + 1
+                ),
+                updatedAt = Instant.now()
             )
-        )
-        return true
-    }
 
-    /**
-     * Récupère tous les utilisateurs (actifs et inactifs) pour l'admin système et les directeurs
-     */
-    fun getAllUsersWithInactive(pageable: Pageable): Page<User> {
-        return userRepository.findAll(pageable)
-    }
+            val updatedFollowing = following.copy(
+                followers = following.followers + followerId,
+                statistics = following.statistics.copy(
+                    followerCount = following.statistics.followerCount + 1
+                ),
+                updatedAt = Instant.now()
+            )
 
-    /**
-     * Trouve un utilisateur par son ID
-     * @param id l'ID de l'utilisateur
-     * @return l'utilisateur trouvé
-     * @throws EntityNotFoundException si l'utilisateur n'est pas trouvé
-     */
-    fun findById(id: ObjectId): User {
-        return userRepository.findById(id).orElseThrow {
-            Exception("Utilisateur non trouvé avec l'ID : ${id.toHexString()}")
+            zip(
+                userRepository.save(updatedFollower),
+                userRepository.save(updatedFollowing)
+            )
         }
     }
 
+    fun unfollowUser(followerId: ObjectId, followingId: ObjectId): Mono<Pair<User, User>> {
+        if (followerId == followingId) {
+            return Mono.error(IllegalArgumentException("Cannot unfollow yourself"))
+        }
+
+        return Mono.zip(
+            findById(followerId),
+            findById(followingId)
+        ).flatMap { (follower, following) ->
+            if (!follower.following.contains(followingId)) {
+                return@flatMap Mono.error<Pair<User, User>>(
+                    IllegalStateException("Not following this user")
+                )
+            }
+
+            val updatedFollower = follower.copy(
+                following = follower.following - followingId,
+                statistics = follower.statistics.copy(
+                    followingCount = maxOf(0, follower.statistics.followingCount - 1)
+                ),
+                updatedAt = Instant.now()
+            )
+
+            val updatedFollowing = following.copy(
+                followers = following.followers - followerId,
+                statistics = following.statistics.copy(
+                    followerCount = maxOf(0, following.statistics.followerCount - 1)
+                ),
+                updatedAt = Instant.now()
+            )
+
+            zip(
+                userRepository.save(updatedFollower),
+                userRepository.save(updatedFollowing)
+            )
+        }
+    }
+
+    fun toDTO(user: User): UserDTO {
+        return UserDTO(
+            id = user.id.toHexString(),
+            username = user.username,
+            email = user.email,
+            firstName = user.firstName,
+            lastName = user.lastName,
+            fullName = "${user.firstName} ${user.lastName}",
+            profilePicture = user.profilePicture,
+            bio = user.bio,
+            role = user.role,
+            socialLinks = user.socialLinks,
+            statistics = user.statistics,
+            isEmailVerified = user.isEmailVerified,
+            createdAt = user.createdAt,
+            lastLoginAt = user.lastLoginAt
+        )
+    }
 }

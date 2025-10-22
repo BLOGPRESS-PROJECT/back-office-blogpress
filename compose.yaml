@@ -1,4 +1,6 @@
 services:
+
+  # Base de données MongoDB
   mongodb:
     image: mongo:7.0
     container_name: blogpress-mongodb
@@ -18,7 +20,8 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
+  # Mon application Spring Boot
+  aapp:
     build:
       context: .
       dockerfile: Dockerfile
@@ -28,14 +31,20 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_DATA_MONGODB_URI=mongodb://root:qwerty87@mongodb:27017/blogpress?authSource=admin
+      - JWT_SECRET=VGhpcyBpcyBhIHZlcnkgc2VjdXJlIGFuZCBsb25nIHNlY3JldCBrZXkgZm9yIEJsb2dwcmVzcyBBUEkgMjAyNQ==
     depends_on:
       mongodb:
         condition: service_healthy
     networks:
       - blogpress-network
+    volumes:
+      - app-uploads:/app/uploads
 
 volumes:
   mongodb-data:
+    driver: local
+  app-uploads:
+    driver: local
 
 networks:
   blogpress-network:
