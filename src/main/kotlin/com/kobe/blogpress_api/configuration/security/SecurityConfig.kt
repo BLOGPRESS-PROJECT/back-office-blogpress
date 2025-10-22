@@ -1,6 +1,8 @@
 package com.kobe.blogpress_api.configuration.security
 
 
+import com.kobe.blogpress_api.configuration.security.jwt.JwtAuthenticationManager
+import com.kobe.blogpress_api.configuration.security.jwt.JwtServerAuthenticationConverter
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpMethod
@@ -47,7 +49,7 @@ class SecurityConfig(
 
         return http
             .csrf { it.disable() }
-            .cors { it.configurationSource(corsConfigurationSource()) }
+            .cors { it.configurationSource(corsConfigurationSource() as org.springframework.web.cors.reactive.CorsConfigurationSource?) }
             .httpBasic { it.disable() }
             .formLogin { it.disable() }
             .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
