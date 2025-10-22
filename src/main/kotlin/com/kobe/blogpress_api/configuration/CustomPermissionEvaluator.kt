@@ -1,5 +1,8 @@
 package com.kobe.blogpress_api.configuration
 
+import com.kobe.blogpress_api.model.user.Permission
+import com.kobe.blogpress_api.model.user.RolePermissionConfig
+import com.kobe.blogpress_api.repository.user.UserRepository
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.bson.types.ObjectId

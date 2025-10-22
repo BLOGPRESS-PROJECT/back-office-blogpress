@@ -1,12 +1,9 @@
 package com.kobe.hrs.services.audit
 
+import com.kobe.blogpress_api.dto.audit.AuditLogSummary
 import com.kobe.blogpress_api.model.audit.AuditLog
 import com.kobe.blogpress_api.model.audit.DeviceInfo
 import com.kobe.blogpress_api.model.audit.GeoLocation
-import com.kobe.hrs.dto.audit.AuditLogSummary
-import com.kobe.hrs.model.audit.AuditLog
-import com.kobe.hrs.model.audit.DeviceInfo
-import com.kobe.hrs.model.audit.GeoLocation
 
 // Services de support (interfaces)
 interface GeoLocationService {

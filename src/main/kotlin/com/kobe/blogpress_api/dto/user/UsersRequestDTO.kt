@@ -47,7 +47,7 @@ data class UserRequestSummary(
 
 // DTOs pour la gestion des désactivations
 data class DeactivateUserRequest(
-    @field:NotNull(message = "La raison de désactivation est requise")
+    @field:NotNull("La raison de désactivation est requise")
     val reason: DeactivationReason,
 
     @field:Size(max = 500, message = "Le commentaire ne peut pas dépasser 500 caractères")
