@@ -20,7 +20,4 @@ enum class Permission {
 
     //================Action sur les user==================//
     FOLLOW, VIEW_PROFILE_ACCOUNT, VIEW_ACCOUNT,
-
-
-
 }
