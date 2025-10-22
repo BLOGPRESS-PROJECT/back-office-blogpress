@@ -19,6 +19,13 @@ repositories {
 	mavenCentral()
 }
 
+// Configuration pour exclure les dépendances conflictuelles
+configurations.all {
+	exclude(group = "org.slf4j", module = "slf4j-simple")
+	exclude(group = "commons-logging", module = "commons-logging")
+	exclude(group = "org.slf4j", module = "slf4j-log4j12")
+}
+
 
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
@@ -43,6 +50,21 @@ dependencies {
 	implementation("io.jsonwebtoken:jjwt-api:0.12.6")
 	runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
 	runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
+
+	// AspectJ pour les annotations @Retryable et AOP
+	implementation("org.springframework.boot:spring-boot-starter-aop")
+	implementation("org.aspectj:aspectjweaver")
+
+	// ========== CACHE REDIS (NOUVEAU - ESSENTIEL) ==========
+	implementation("org.springframework.boot:spring-boot-starter-cache")
+	implementation("org.springframework.boot:spring-boot-starter-data-redis")
+	implementation("org.springframework.boot:spring-boot-starter-data-redis-reactive")
+	implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
+
+	// Test dependencies
+	testImplementation("org.springframework.boot:spring-boot-starter-test") {
+		exclude(group = "org.slf4j", module = "slf4j-simple")
+	}
 }
 
 kotlin {
@@ -53,4 +75,13 @@ kotlin {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+
+	// ========== OPTIMISATION DES TESTS (NOUVEAU) ==========
+	jvmArgs("-Xmx2g", "-XX:+UseG1GC")
+	systemProperty("spring.profiles.active", "test")
+
+	// Désactiver les tests qui utilisent les services externes en CI
+	if (System.getenv("CI") == "true") {
+		systemProperty("spring.test.context.cache.maxSize", "1")
+	}
 }
