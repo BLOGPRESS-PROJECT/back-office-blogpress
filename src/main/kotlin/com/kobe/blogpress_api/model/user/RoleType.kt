@@ -9,11 +9,10 @@ enum class RoleType(
     ADMIN_SYSTEM(1, "SYSTEME", "Administrateur Système"),
 
     // Niveau User authentifies (niveau 2)
-    AUTHOR_USER(2, "AUTHOR_USER", "Utilisateur createur de contenu"),
-    SIMPLE_USER(2, "SIMPLE_USER", "Utilisateur simple sans contenu"),
+    USER(2, "SIMPLE_USER", "Utilisateur simple sans contenu"),
 
     // Niveau visiteur (niveau 3)
-    VISITOR(3, "RH", "Directeur des Ressources Humaines");
+    VISITOR(3, "VISITOR", "Visiteur de l'application");
 
     fun hasHigherOrEqualLevel(other: RoleType): Boolean {
         return this.level <= other.level
@@ -34,6 +33,20 @@ object RolePermissionConfig {
             Permission.CANCEL_REQUEST, Permission.REVIEW_REQUEST_APPROVE_REQUEST, Permission.READ_ALL_REQUEST,
 
             Permission.ASSIGN_ROLE, Permission.MODIFY_ROLE, Permission.RESET_PASSWORD
+        ),
+
+        RoleType.USER to setOf(
+            Permission.GET_ALL_USERS, Permission.FULL_USER_CONTROL,
+            Permission.CREATE_USER, Permission.READ_USER, Permission.UPDATE_USER, Permission.DELETE_USER, Permission.ACTIVATE_USER, Permission.DEACTIVATE_USER,
+
+            Permission.CREATE_REQUEST, Permission.READ_OWN_REQUESTS, Permission.UPDATE_REQUEST, Permission.DELETE_REQUEST,
+            Permission.CANCEL_REQUEST, Permission.REVIEW_REQUEST_APPROVE_REQUEST, Permission.READ_ALL_REQUEST,
+
+            Permission.ASSIGN_ROLE, Permission.MODIFY_ROLE, Permission.RESET_PASSWORD
+        ),
+
+        RoleType.VISITOR to setOf(
+
         )
     )
 
