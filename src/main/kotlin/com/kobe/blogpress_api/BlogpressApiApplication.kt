@@ -3,9 +3,11 @@ package com.kobe.blogpress_api
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan
 import org.springframework.boot.runApplication
+import org.springframework.data.mongodb.repository.config.EnableMongoRepositories
 import org.springframework.data.mongodb.repository.config.EnableReactiveMongoRepositories
 
 @EnableReactiveMongoRepositories
+@EnableMongoRepositories
 @ConfigurationPropertiesScan
 @SpringBootApplication
 class BlogpressApiApplication
