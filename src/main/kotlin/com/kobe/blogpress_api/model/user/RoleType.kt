@@ -26,27 +26,32 @@ enum class RoleType(
 object RolePermissionConfig {
     private val rolePermissions = mapOf(
         RoleType.ADMIN_SYSTEM to setOf(
-            Permission.GET_ALL_USERS, Permission.FULL_USER_CONTROL,
-            Permission.CREATE_USER, Permission.READ_USER, Permission.UPDATE_USER, Permission.DELETE_USER, Permission.ACTIVATE_USER, Permission.DEACTIVATE_USER,
+            Permission.GOD_MODE,
+            Permission.CREATE_ACCOUNT,
+            Permission.RESET_PASSWORD,
+            Permission.READ_USER,
+            Permission.DELETE_USER,
+            Permission.DEACTIVATE_USER,
+            Permission.REACTIVATE_USER,
 
-            Permission.CREATE_REQUEST, Permission.READ_OWN_REQUESTS, Permission.UPDATE_REQUEST, Permission.DELETE_REQUEST,
-            Permission.CANCEL_REQUEST, Permission.REVIEW_REQUEST_APPROVE_REQUEST, Permission.READ_ALL_REQUEST,
-
-            Permission.ASSIGN_ROLE, Permission.MODIFY_ROLE, Permission.RESET_PASSWORD
         ),
 
         RoleType.USER to setOf(
-            Permission.GET_ALL_USERS, Permission.FULL_USER_CONTROL,
-            Permission.CREATE_USER, Permission.READ_USER, Permission.UPDATE_USER, Permission.DELETE_USER, Permission.ACTIVATE_USER, Permission.DEACTIVATE_USER,
+            //user management account
+            Permission.RESET_PASSWORD,
+            //action sur le contenu
+            Permission.CREATE,Permission.READ,Permission.UPDATE,Permission.DELETE,
+            Permission.LIKE,Permission.FAVORIS,Permission.COMMENT,Permission.FORWARD,
 
-            Permission.CREATE_REQUEST, Permission.READ_OWN_REQUESTS, Permission.UPDATE_REQUEST, Permission.DELETE_REQUEST,
-            Permission.CANCEL_REQUEST, Permission.REVIEW_REQUEST_APPROVE_REQUEST, Permission.READ_ALL_REQUEST,
-
-            Permission.ASSIGN_ROLE, Permission.MODIFY_ROLE, Permission.RESET_PASSWORD
+            //users network action
+            Permission.FOLLOW, Permission.VIEW_PROFILE_ACCOUNT, Permission.VIEW_ACCOUNT,
         ),
 
         RoleType.VISITOR to setOf(
-
+            //create account
+            Permission.CREATE_ACCOUNT,
+            //lire le contenu public
+            Permission.READ,
         )
     )
 

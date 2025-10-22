@@ -5,6 +5,7 @@ enum class Permission {
     GOD_MODE,
 
     //================USER MANAGEMENT==================//
+    CREATE_ACCOUNT,
     RESET_PASSWORD,
     READ_USER,
     DELETE_USER,
