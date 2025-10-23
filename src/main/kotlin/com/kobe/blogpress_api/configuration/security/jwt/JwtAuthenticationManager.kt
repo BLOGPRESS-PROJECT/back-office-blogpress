@@ -27,7 +27,7 @@ class JwtAuthenticationManager(
                     userId.toHexString(),
                     token,
                     authorities
-                )
+                ) as Authentication // Conversion explicite
             }
             .switchIfEmpty(Mono.error(RuntimeException("Invalid JWT token")))
     }

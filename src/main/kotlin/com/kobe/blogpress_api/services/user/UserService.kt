@@ -8,8 +8,8 @@ import com.kobe.blogpress_api.repository.user.UserRepository
 import org.bson.types.ObjectId
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Mono
-import reactor.kotlin.core.util.function.component1
-import reactor.kotlin.core.util.function.component2
+import reactor.util.function.Tuple2
+import reactor.util.function.Tuples
 import java.time.Instant
 
 @Service
@@ -60,7 +60,10 @@ class UserService(
         return Mono.zip(
             findById(followerId),
             findById(followingId)
-        ).flatMap { (follower, following) ->
+        ).flatMap { tuple ->
+            val follower = tuple.t1
+            val following = tuple.t2
+
             if (follower.following.contains(followingId)) {
                 return@flatMap Mono.error<Pair<User, User>>(
                     IllegalStateException("Already following this user")
@@ -83,10 +86,12 @@ class UserService(
                 updatedAt = Instant.now()
             )
 
-            zip(
+            Mono.zip(
                 userRepository.save(updatedFollower),
                 userRepository.save(updatedFollowing)
-            )
+            ).map { savedTuple ->
+                Pair(savedTuple.t1, savedTuple.t2)
+            }
         }
     }
 
@@ -98,7 +103,10 @@ class UserService(
         return Mono.zip(
             findById(followerId),
             findById(followingId)
-        ).flatMap { (follower, following) ->
+        ).flatMap { tuple ->
+            val follower = tuple.t1
+            val following = tuple.t2
+
             if (!follower.following.contains(followingId)) {
                 return@flatMap Mono.error<Pair<User, User>>(
                     IllegalStateException("Not following this user")
@@ -121,10 +129,12 @@ class UserService(
                 updatedAt = Instant.now()
             )
 
-            zip(
+            Mono.zip(
                 userRepository.save(updatedFollower),
                 userRepository.save(updatedFollowing)
-            )
+            ).map { savedTuple ->
+                Pair(savedTuple.t1, savedTuple.t2)
+            }
         }
     }
 
