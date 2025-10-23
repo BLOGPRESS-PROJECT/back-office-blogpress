@@ -1,12 +1,10 @@
 package com.kobe.blogpress_api.configuration.security
 
-
 import com.kobe.blogpress_api.configuration.security.jwt.JwtAuthenticationManager
 import com.kobe.blogpress_api.configuration.security.jwt.JwtServerAuthenticationConverter
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpMethod
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder
@@ -17,11 +15,10 @@ import org.springframework.security.web.server.SecurityWebFilterChain
 import org.springframework.security.web.server.authentication.AuthenticationWebFilter
 import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository
 import org.springframework.web.cors.CorsConfiguration
-import org.springframework.web.cors.CorsConfigurationSource
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource
+import org.springframework.web.cors.reactive.CorsConfigurationSource
+import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource
 
 @Configuration
-@EnableMethodSecurity
 @EnableWebFluxSecurity
 @EnableReactiveMethodSecurity
 class SecurityConfig(
@@ -37,7 +34,7 @@ class SecurityConfig(
 
         return http
             .csrf { it.disable() }
-            .cors { it.configurationSource(corsConfigurationSource() as org.springframework.web.cors.reactive.CorsConfigurationSource?) }
+            .cors { it.configurationSource(corsConfigurationSource()) }
             .httpBasic { it.disable() }
             .formLogin { it.disable() }
             .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())

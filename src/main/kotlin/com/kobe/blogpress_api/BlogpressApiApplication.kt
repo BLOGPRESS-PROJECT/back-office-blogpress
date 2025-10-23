@@ -7,7 +7,6 @@ import org.springframework.data.mongodb.repository.config.EnableMongoRepositorie
 import org.springframework.data.mongodb.repository.config.EnableReactiveMongoRepositories
 
 @EnableReactiveMongoRepositories
-@EnableMongoRepositories
 @ConfigurationPropertiesScan
 @SpringBootApplication
 class BlogpressApiApplication
