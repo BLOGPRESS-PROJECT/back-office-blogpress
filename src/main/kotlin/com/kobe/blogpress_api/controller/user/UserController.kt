@@ -6,7 +6,6 @@ import com.kobe.blogpress_api.dto.user.UserDTO
 import com.kobe.blogpress_api.services.fileStorage.FileStorageService
 import com.kobe.blogpress_api.services.user.UserService
 import jakarta.validation.Valid
-import kotlinx.coroutines.reactor.awaitSingle
 import org.bson.types.ObjectId
 import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
@@ -107,7 +106,8 @@ class UserController(
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] Upload profile picture for user: $userId")
 
-        val fileUrl = fileStorageService.storeProfilePicture(filePart, userId).awaitSingle()
+        // Appel direct sans .awaitSingle() car c'est déjà une suspend function
+        val fileUrl = fileStorageService.storeProfilePicture(filePart, userId)
         logger.info("[$requestId] File uploaded successfully: $fileUrl")
 
         val user = userService.updateProfilePicture(ObjectId(userId), fileUrl)
@@ -132,7 +132,8 @@ class UserController(
         val user = userService.findById(ObjectId(userId))
         val oldPicture = user.profilePicture
 
-        fileStorageService.deleteProfilePicture(oldPicture ?: "").awaitSingle()
+        // Appel direct sans .awaitSingle()
+        fileStorageService.deleteProfilePicture(oldPicture ?: "")
         val updatedUser = userService.updateProfilePicture(ObjectId(userId), "")
 
         logger.info("[$requestId] Profile picture deleted successfully for user: $userId")
