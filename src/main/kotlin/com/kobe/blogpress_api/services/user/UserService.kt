@@ -5,9 +5,10 @@ import com.kobe.blogpress_api.dto.user.UpdateProfileRequestDTO
 import com.kobe.blogpress_api.dto.user.UserDTO
 import com.kobe.blogpress_api.exception.ResourceNotFoundException
 import com.kobe.blogpress_api.repository.user.UserRepository
+import kotlinx.coroutines.reactor.awaitSingle
+import kotlinx.coroutines.reactor.awaitSingleOrNull
 import org.bson.types.ObjectId
 import org.springframework.stereotype.Service
-import reactor.core.publisher.Mono
 import java.time.Instant
 
 @Service
@@ -15,125 +16,107 @@ class UserService(
     private val userRepository: UserRepository
 ) {
 
-    fun findById(userId: ObjectId): Mono<User> {
-        return userRepository.findById(userId)
-            .switchIfEmpty(Mono.error(ResourceNotFoundException("User not found with id: ${userId.toHexString()}")))
+    suspend fun findById(userId: ObjectId): User {
+        return userRepository.findById(userId).awaitSingleOrNull()
+            ?: throw ResourceNotFoundException("User not found with id: ${userId.toHexString()}")
     }
 
-    fun findByUsername(username: String): Mono<User> {
-        return userRepository.findByUsername(username)
-            .switchIfEmpty(Mono.error(ResourceNotFoundException("User not found with username: $username")))
+    suspend fun findByUsername(username: String): User {
+        return userRepository.findByUsername(username).awaitSingleOrNull()
+            ?: throw ResourceNotFoundException("User not found with username: $username")
     }
 
-    fun updateProfile(userId: ObjectId, updateRequest: UpdateProfileRequestDTO): Mono<User> {
-        return findById(userId)
-            .flatMap { user ->
-                val updatedUser = user.copy(
-                    firstName = updateRequest.firstName ?: user.firstName,
-                    lastName = updateRequest.lastName ?: user.lastName,
-                    bio = updateRequest.bio ?: user.bio,
-                    socialLinks = updateRequest.socialLinks ?: user.socialLinks,
-                    updatedAt = Instant.now()
-                )
-                userRepository.save(updatedUser)
-            }
+    suspend fun updateProfile(userId: ObjectId, updateRequest: UpdateProfileRequestDTO): User {
+        val user = findById(userId)
+
+        val updatedUser = user.copy(
+            firstName = updateRequest.firstName ?: user.firstName,
+            lastName = updateRequest.lastName ?: user.lastName,
+            bio = updateRequest.bio ?: user.bio,
+            socialLinks = updateRequest.socialLinks ?: user.socialLinks,
+            updatedAt = Instant.now()
+        )
+
+        return userRepository.save(updatedUser).awaitSingle()
     }
 
-    fun updateProfilePicture(userId: ObjectId, profilePictureUrl: String): Mono<User> {
-        return findById(userId)
-            .flatMap { user ->
-                val updatedUser = user.copy(
-                    profilePicture = profilePictureUrl,
-                    updatedAt = Instant.now()
-                )
-                userRepository.save(updatedUser)
-            }
+    suspend fun updateProfilePicture(userId: ObjectId, profilePictureUrl: String): User {
+        val user = findById(userId)
+
+        val updatedUser = user.copy(
+            profilePicture = profilePictureUrl,
+            updatedAt = Instant.now()
+        )
+
+        return userRepository.save(updatedUser).awaitSingle()
     }
 
-    fun followUser(followerId: ObjectId, followingId: ObjectId): Mono<Pair<User, User>> {
+    suspend fun followUser(followerId: ObjectId, followingId: ObjectId): Pair<User, User> {
         if (followerId == followingId) {
-            return Mono.error(IllegalArgumentException("Cannot follow yourself"))
+            throw IllegalArgumentException("Cannot follow yourself")
         }
 
-        return Mono.zip(
-            findById(followerId),
-            findById(followingId)
-        ).flatMap { tuple ->
-            val follower = tuple.t1
-            val following = tuple.t2
+        val follower = findById(followerId)
+        val following = findById(followingId)
 
-            if (follower.following.contains(followingId)) {
-                return@flatMap Mono.error<Pair<User, User>>(
-                    IllegalStateException("Already following this user")
-                )
-            }
-
-            val updatedFollower = follower.copy(
-                following = follower.following + followingId,
-                statistics = follower.statistics.copy(
-                    followingCount = follower.statistics.followingCount + 1
-                ),
-                updatedAt = Instant.now()
-            )
-
-            val updatedFollowing = following.copy(
-                followers = following.followers + followerId,
-                statistics = following.statistics.copy(
-                    followerCount = following.statistics.followerCount + 1
-                ),
-                updatedAt = Instant.now()
-            )
-
-            Mono.zip(
-                userRepository.save(updatedFollower),
-                userRepository.save(updatedFollowing)
-            ).map { savedTuple ->
-                Pair(savedTuple.t1, savedTuple.t2)
-            }
+        if (follower.following.contains(followingId)) {
+            throw IllegalStateException("Already following this user")
         }
+
+        val updatedFollower = follower.copy(
+            following = follower.following + followingId,
+            statistics = follower.statistics.copy(
+                followingCount = follower.statistics.followingCount + 1
+            ),
+            updatedAt = Instant.now()
+        )
+
+        val updatedFollowing = following.copy(
+            followers = following.followers + followerId,
+            statistics = following.statistics.copy(
+                followerCount = following.statistics.followerCount + 1
+            ),
+            updatedAt = Instant.now()
+        )
+
+        val savedFollower = userRepository.save(updatedFollower).awaitSingle()
+        val savedFollowing = userRepository.save(updatedFollowing).awaitSingle()
+
+        return Pair(savedFollower, savedFollowing)
     }
 
-    fun unfollowUser(followerId: ObjectId, followingId: ObjectId): Mono<Pair<User, User>> {
+    suspend fun unfollowUser(followerId: ObjectId, followingId: ObjectId): Pair<User, User> {
         if (followerId == followingId) {
-            return Mono.error(IllegalArgumentException("Cannot unfollow yourself"))
+            throw IllegalArgumentException("Cannot unfollow yourself")
         }
 
-        return Mono.zip(
-            findById(followerId),
-            findById(followingId)
-        ).flatMap { tuple ->
-            val follower = tuple.t1
-            val following = tuple.t2
+        val follower = findById(followerId)
+        val following = findById(followingId)
 
-            if (!follower.following.contains(followingId)) {
-                return@flatMap Mono.error<Pair<User, User>>(
-                    IllegalStateException("Not following this user")
-                )
-            }
-
-            val updatedFollower = follower.copy(
-                following = follower.following - followingId,
-                statistics = follower.statistics.copy(
-                    followingCount = maxOf(0, follower.statistics.followingCount - 1)
-                ),
-                updatedAt = Instant.now()
-            )
-
-            val updatedFollowing = following.copy(
-                followers = following.followers - followerId,
-                statistics = following.statistics.copy(
-                    followerCount = maxOf(0, following.statistics.followerCount - 1)
-                ),
-                updatedAt = Instant.now()
-            )
-
-            Mono.zip(
-                userRepository.save(updatedFollower),
-                userRepository.save(updatedFollowing)
-            ).map { savedTuple ->
-                Pair(savedTuple.t1, savedTuple.t2)
-            }
+        if (!follower.following.contains(followingId)) {
+            throw IllegalStateException("Not following this user")
         }
+
+        val updatedFollower = follower.copy(
+            following = follower.following - followingId,
+            statistics = follower.statistics.copy(
+                followingCount = maxOf(0, follower.statistics.followingCount - 1)
+            ),
+            updatedAt = Instant.now()
+        )
+
+        val updatedFollowing = following.copy(
+            followers = following.followers - followerId,
+            statistics = following.statistics.copy(
+                followerCount = maxOf(0, following.statistics.followerCount - 1)
+            ),
+            updatedAt = Instant.now()
+        )
+
+        val savedFollower = userRepository.save(updatedFollower).awaitSingle()
+        val savedFollowing = userRepository.save(updatedFollowing).awaitSingle()
+
+        return Pair(savedFollower, savedFollowing)
     }
 
     fun toDTO(user: User): UserDTO {
