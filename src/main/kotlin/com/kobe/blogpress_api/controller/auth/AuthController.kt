@@ -11,7 +11,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
-import reactor.core.publisher.Mono
 import java.util.*
 
 @RestController
@@ -23,91 +22,76 @@ class AuthController(
     private val logger = LoggerFactory.getLogger(AuthController::class.java)
 
     @PostMapping("/register")
-    fun register(
+    suspend fun register(
         @Valid @RequestBody registerRequest: RegisterRequestDTO
-    ): Mono<ResponseEntity<ApiResponseDto<AuthResponseDTO>>> {
+    ): ResponseEntity<ApiResponseDto<AuthResponseDTO>> {
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] Register request for email: ${registerRequest.email}")
 
-        return authService.register(registerRequest)
-            .map { authResponse ->
-                logger.info("[$requestId] User registered successfully: ${authResponse.user.username}")
-                ResponseEntity
-                    .status(HttpStatus.CREATED)
-                    .body(
-                        ApiResponseDto.success(
-                            data = authResponse,
-                            message = "User registered successfully",
-                            requestId = requestId
-                        )
-                    )
-            }
-            .doOnError { error ->
-                logger.error("[$requestId] Registration failed: ${error.message}")
-            }
+        val authResponse = authService.register(registerRequest)
+
+        logger.info("[$requestId] User registered successfully: ${authResponse.user.username}")
+        return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(
+                ApiResponseDto.success(
+                    data = authResponse,
+                    message = "User registered successfully",
+                    requestId = requestId
+                )
+            )
     }
 
     @PostMapping("/login")
-    fun login(
+    suspend fun login(
         @Valid @RequestBody loginRequest: LoginRequestDTO
-    ): Mono<ResponseEntity<ApiResponseDto<AuthResponseDTO>>> {
+    ): ResponseEntity<ApiResponseDto<AuthResponseDTO>> {
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] Login request for: ${loginRequest.emailOrUsername}")
 
-        return authService.login(loginRequest)
-            .map { authResponse ->
-                logger.info("[$requestId] User logged in successfully: ${authResponse.user.username}")
-                ResponseEntity.ok(
-                    ApiResponseDto.success(
-                        data = authResponse,
-                        message = "Login successful",
-                        requestId = requestId
-                    )
-                )
-            }
-            .doOnError { error ->
-                logger.error("[$requestId] Login failed: ${error.message}")
-            }
+        val authResponse = authService.login(loginRequest)
+
+        logger.info("[$requestId] User logged in successfully: ${authResponse.user.username}")
+        return ResponseEntity.ok(
+            ApiResponseDto.success(
+                data = authResponse,
+                message = "Login successful",
+                requestId = requestId
+            )
+        )
     }
 
     @PostMapping("/refresh")
-    fun refreshToken(
+    suspend fun refreshToken(
         @Valid @RequestBody refreshRequest: RefreshTokenRequestDTO
-    ): Mono<ResponseEntity<ApiResponseDto<AuthResponseDTO>>> {
+    ): ResponseEntity<ApiResponseDto<AuthResponseDTO>> {
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] Refresh token request")
 
-        return authService.refreshToken(refreshRequest.refreshToken)
-            .map { authResponse ->
-                logger.info("[$requestId] Token refreshed successfully for user: ${authResponse.user.username}")
-                ResponseEntity.ok(
-                    ApiResponseDto.success(
-                        data = authResponse,
-                        message = "Token refreshed successfully",
-                        requestId = requestId
-                    )
-                )
-            }
-            .doOnError { error ->
-                logger.error("[$requestId] Token refresh failed: ${error.message}")
-            }
+        val authResponse = authService.refreshToken(refreshRequest.refreshToken)
+
+        logger.info("[$requestId] Token refreshed successfully for user: ${authResponse.user.username}")
+        return ResponseEntity.ok(
+            ApiResponseDto.success(
+                data = authResponse,
+                message = "Token refreshed successfully",
+                requestId = requestId
+            )
+        )
     }
 
     @PostMapping("/logout")
-    fun logout(): Mono<ResponseEntity<ApiResponseDto<Nothing>>> {
+    suspend fun logout(): ResponseEntity<ApiResponseDto<Nothing>> {
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] Logout request")
 
         // Avec JWT, le logout est géré côté client (suppression du token)
-        // On peut implémenter une blacklist de tokens si nécessaire
-        return Mono.just(
-            ResponseEntity.ok(
-                ApiResponseDto.success(
-                    data = null,
-                    message = "Logout successful. Please remove the token from client side.",
-                    requestId = requestId
-                )
+        return ResponseEntity.ok(
+            ApiResponseDto.success(
+                data = null,
+                message = "Logout successful. Please remove the token from client side.",
+                requestId = requestId
             )
-        ) as Mono<ResponseEntity<ApiResponseDto<Nothing>>>
+        ) as ResponseEntity<ApiResponseDto<Nothing>>
     }
 }
