@@ -91,3 +91,16 @@ class SecurityConfig(
     @Bean
     fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
 }
+
+/*
+* bon je veux une architechture un peu comme ca :
+* creer un directory pour blogpress-db, blogpress-api
+*
+* setup/blogpress-db/-docker-compose-db.yaml, -env-db
+* setup/blogpress-api/ dokcer-compose-api.yaml, -env-api
+*
+*
+*
+*
+*
+* */
