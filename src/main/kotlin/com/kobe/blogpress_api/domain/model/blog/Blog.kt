@@ -1,0 +1,37 @@
+package com.kobe.blogpress_api.domain.model.blog
+
+import org.bson.types.ObjectId
+import org.springframework.data.annotation.Id
+import org.springframework.data.mongodb.core.index.Indexed
+import org.springframework.data.mongodb.core.mapping.Document
+import java.time.Instant
+
+@Document(collection = "blogs")
+data class Blog(
+    @Id
+    val id: ObjectId = ObjectId(),
+    val title: String,
+    val description: String? = null,
+
+    @Indexed(unique = true)
+    val slug: String,
+    val logoImageUrl: String? = null,
+    val coverImageUrl: String? = null,
+
+    @Indexed
+    val authorId: ObjectId,
+    val isPublished: Boolean = false,
+    val isPrivate: Boolean = false,
+    val publishAt: Instant? = null,
+
+    @Indexed
+    val createdAt: Instant = Instant.now(),
+    val updatedAt: Instant = Instant.now(),
+
+    // Statistics
+    val postCount: Long = 0,
+    val viewCount: Long = 0,
+    val likeCount: Long = 0,
+    val shareCount: Long = 0,
+    val favoriteCount: Long = 0
+)
