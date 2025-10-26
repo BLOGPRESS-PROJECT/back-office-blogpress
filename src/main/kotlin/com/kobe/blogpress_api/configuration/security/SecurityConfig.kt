@@ -44,10 +44,16 @@ class SecurityConfig(
                     // Authentification
                     .pathMatchers("/api/auth/register", "/api/auth/login", "/api/auth/refresh").permitAll()
 
-                    // Lecture publique
+                    // Lecture publique des blogs et articles
+                    .pathMatchers(HttpMethod.GET, "/api/blogs", "/api/blogs/**").permitAll()
+                    .pathMatchers(HttpMethod.GET, "/api/articles", "/api/articles/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/posts", "/api/posts/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/users/profile/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/users/username/**").permitAll()
+
+                    // Interactions publiques (views, shares - pas besoin d'auth)
+                    .pathMatchers(HttpMethod.POST, "/api/content/*/view").permitAll()
+                    .pathMatchers(HttpMethod.POST, "/api/content/*/share").permitAll()
 
                     // Upload d'images (public pour le moment, on sécurisera plus tard)
                     .pathMatchers(HttpMethod.GET, "/uploads/**").permitAll()
@@ -59,11 +65,29 @@ class SecurityConfig(
                     .pathMatchers("/api/admin/**").hasRole("ADMIN")
 
                     // ===== ROUTES UTILISATEUR AUTHENTIFIÉ =====
+                    // User management
                     .pathMatchers("/api/users/me/**").authenticated()
                     .pathMatchers(HttpMethod.PUT, "/api/users/**").authenticated()
                     .pathMatchers(HttpMethod.DELETE, "/api/users/**").authenticated()
                     .pathMatchers("/api/users/follow/**").authenticated()
                     .pathMatchers("/api/users/unfollow/**").authenticated()
+
+                    // Blog management (création, modification, suppression)
+                    .pathMatchers(HttpMethod.POST, "/api/blogs").authenticated()
+                    .pathMatchers(HttpMethod.PUT, "/api/blogs/**").authenticated()
+                    .pathMatchers(HttpMethod.DELETE, "/api/blogs/**").authenticated()
+                    .pathMatchers(HttpMethod.GET, "/api/blogs/user").authenticated()
+
+                    // Article management (création, modification, suppression)
+                    .pathMatchers(HttpMethod.POST, "/api/articles/**").authenticated()
+                    .pathMatchers(HttpMethod.PUT, "/api/articles/**").authenticated()
+                    .pathMatchers(HttpMethod.DELETE, "/api/articles/**").authenticated()
+
+                    // Interactions authentifiées (likes, favorites)
+                    .pathMatchers(HttpMethod.POST, "/api/content/*/like").authenticated()
+                    .pathMatchers(HttpMethod.DELETE, "/api/content/*/like").authenticated()
+                    .pathMatchers(HttpMethod.POST, "/api/content/*/favorite").authenticated()
+                    .pathMatchers(HttpMethod.DELETE, "/api/content/*/favorite").authenticated()
 
                     // Toutes les autres routes nécessitent une authentification
                     .anyExchange().authenticated()
