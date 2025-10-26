@@ -5,7 +5,7 @@ import com.kobe.blogpress_api.dto.user.AuthResponseDTO
 import com.kobe.blogpress_api.dto.user.LoginRequestDTO
 import com.kobe.blogpress_api.dto.user.RefreshTokenRequestDTO
 import com.kobe.blogpress_api.dto.user.RegisterRequestDTO
-import com.kobe.blogpress_api.services.auth.AuthService
+import com.kobe.blogpress_api.services.user.AuthService
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus

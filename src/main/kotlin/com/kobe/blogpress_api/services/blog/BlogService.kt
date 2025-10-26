@@ -6,6 +6,7 @@ import com.kobe.blogpress_api.dto.blog.BlogStats
 import com.kobe.blogpress_api.dto.blog.BlogSummaryDto
 import com.kobe.blogpress_api.dto.blog.CreateBlogRequest
 import com.kobe.blogpress_api.dto.blog.UpdateBlogRequest
+import com.kobe.blogpress_api.exception.ContentNotYetPublishedException
 import com.kobe.blogpress_api.exception.ResourceNotFoundException
 import com.kobe.blogpress_api.repository.blog.BlogRepository
 import kotlinx.coroutines.flow.Flow
@@ -88,9 +89,30 @@ class BlogService(
         blogRepository.delete(blog).awaitSingleOrNull()
     }
 
-    suspend fun getBlogBySlug(slug: String): BlogResponse {
+    suspend fun getBlogBySlug(slug: String, userId: ObjectId? = null): BlogResponse {
         val blog = blogRepository.findBySlug(slug).awaitSingleOrNull()
             ?: throw ResourceNotFoundException("Blog not found with slug: $slug")
+
+        // Vérifier si le blog est privé
+        if (blog.isPrivate && blog.authorId != userId) {
+            throw IllegalArgumentException("This blog is private")
+        }
+
+        // Vérifier si le blog est publié
+        if (!blog.isPublished) {
+            // Si l'utilisateur n'est pas l'auteur, interdire l'accès
+            if (blog.authorId != userId) {
+                throw IllegalArgumentException("This blog is not published yet")
+            }
+        }
+
+        // Vérifier la date de publication programmée
+        if (blog.publishAt != null && blog.publishAt.isAfter(Instant.now())) {
+            // Si l'utilisateur n'est pas l'auteur, bloquer l'accès avec le temps restant
+            if (blog.authorId != userId) {
+                throw ContentNotYetPublishedException(blog.publishAt, "Blog")
+            }
+        }
 
         return toBlogResponse(blog)
     }

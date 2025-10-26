@@ -89,12 +89,14 @@ class BlogController(
 
     @GetMapping("/{slug}")
     suspend fun getBlogBySlug(
-        @PathVariable slug: String
+        @PathVariable slug: String,
+        @AuthenticationPrincipal userId: String? // Optionnel pour les users non connectés
     ): ResponseEntity<ApiResponseDto<BlogResponse>> {
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] Get blog by slug: $slug")
 
-        val blog = blogService.getBlogBySlug(slug)
+        val userObjectId = userId?.let { ObjectId(it) }
+        val blog = blogService.getBlogBySlug(slug, userObjectId)
 
         return ResponseEntity.ok(
             ApiResponseDto.success(

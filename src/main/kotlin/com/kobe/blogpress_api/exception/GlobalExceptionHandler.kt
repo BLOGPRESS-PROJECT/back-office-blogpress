@@ -160,4 +160,20 @@ class GlobalExceptionHandler {
                 )
             )
     }
+
+    @ExceptionHandler(ContentNotYetPublishedException::class)
+    fun handleContentNotYetPublished(ex: ContentNotYetPublishedException): ResponseEntity<ApiResponseDto<Nothing>> {
+        return ResponseEntity
+            .status(HttpStatus.FORBIDDEN)
+            .body(
+                ApiResponseDto.error(
+                    message = ex.message ?: "Content not yet published",
+                    errorCode = "CONTENT_NOT_YET_PUBLISHED",
+                    errorDetails = mapOf(
+                        "publishAt" to ex.publishAt.toString(),
+                        "timeRemaining" to ex.getTimeRemaining()
+                    )
+                )
+            )
+    }
 }
