@@ -40,8 +40,8 @@ data class RegisterRequestDTO(
 
     val gender: Gender? = null,
 
-    @field:Size(max = 100, message = "Location cannot exceed 100 characters")
-    val location: String? = null,
+    @field:Size(max = 100, message = "Country cannot exceed 100 characters")
+    val country: String? = null,
 
     @field:Pattern(
         regexp = "^[+]?[0-9]{10,15}$",

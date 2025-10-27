@@ -51,6 +51,7 @@ class DataInitializer(
                         role = Role.ADMIN,
                         isEmailVerified = true,
                         bio = "Default system administrator",
+                        country = "Cameroun",
                         isActive = true,
                         gender = Gender.MALE,
                     )

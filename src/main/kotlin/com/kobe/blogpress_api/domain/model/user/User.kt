@@ -2,7 +2,6 @@ package com.kobe.blogpress_api.domain.model.user
 
 import org.bson.types.ObjectId
 import org.springframework.data.annotation.Id
-import org.springframework.data.mongodb.core.index.CompoundIndex
 import org.springframework.data.mongodb.core.index.Indexed
 import org.springframework.data.mongodb.core.mapping.Document
 import java.time.Instant
@@ -18,40 +17,27 @@ data class User(
 
     @Indexed(unique = true)
     val email: String,
-
     val password: String,
-
     val firstName: String,
-
     val lastName: String,
 
     // ===== NOUVEAUX CHAMPS - INFORMATIONS PERSONNELLES =====
     val birthDate: LocalDate? = null,
-
     val gender: Gender? = null,
-
-    val location: String? = null,
-
+    val country: String? = null,
     val phoneNumber: String? = null,
-
     val interests: List<String> = emptyList(),
-
     val preferredLanguage: String = "fr",
 
     // ===== PROFIL PUBLIC =====
     val profilePicture: String? = null,
-
     val bio: String? = null,
-
     val website: String? = null,
-
     val socialLinks: SocialLinks = SocialLinks(),
 
     // ===== RÔLE ET STATUT =====
     val role: Role = Role.USER,
-
     val isActive: Boolean = true,
-
     val isEmailVerified: Boolean = false,
 
     // ===== STATISTIQUES =====
@@ -59,15 +45,12 @@ data class User(
 
     // ===== RELATIONS =====
     val followers: Set<ObjectId> = emptySet(),
-
     val following: Set<ObjectId> = emptySet(),
 
     // ===== DATES =====
     @Indexed
     val createdAt: Instant = Instant.now(),
-
     val updatedAt: Instant = Instant.now(),
-
     val lastLoginAt: Instant? = null
 )
 

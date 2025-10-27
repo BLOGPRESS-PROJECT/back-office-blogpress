@@ -20,7 +20,7 @@ data class UpdateProfileRequestDTO(
     val gender: Gender? = null,
 
     @field:Size(max = 100)
-    val location: String? = null,
+    val country: String? = null,
 
     @field:Pattern(regexp = "^[+]?[0-9]{10,15}$")
     val phoneNumber: String? = null,

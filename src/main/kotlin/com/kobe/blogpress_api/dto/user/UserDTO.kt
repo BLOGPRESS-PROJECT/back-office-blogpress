@@ -36,7 +36,7 @@ data class UserDTO(
     val birthDate: LocalDate? = null,
     val age: Int? = null,
     val gender: Gender? = null,
-    val location: String? = null,
+    val country: String? = null,
     val phoneNumber: String? = null,
     val interests: List<String> = emptyList(),
     val preferredLanguage: String = "fr",
