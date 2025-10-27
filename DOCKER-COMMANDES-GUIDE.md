@@ -1038,11 +1038,11 @@ docker inspect --format='{{json .}}' <container_id> | jq
 ### Variables d'environnement
 ```bash
 # Utiliser un fichier .env avec docker compose
-# Crée .env dans le même dossier que compose.yaml
+# Crée .env dans le même dossier que docker-compose-all.yaml
 MONGO_PASSWORD=qwerty87
 APP_PORT=8090
 
-# Dans compose.yaml
+# Dans docker-compose-all.yaml
 environment:
   - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
 ports:
@@ -1051,7 +1051,7 @@ ports:
 
 ### Health checks personnalisés
 ```yaml
-# Dans compose.yaml
+# Dans docker-compose-all.yaml
 healthcheck:
   test: ["CMD", "curl", "-f", "http://localhost:8090/actuator/health"]
   interval: 30s
@@ -1062,7 +1062,7 @@ healthcheck:
 
 ### Limiter les ressources
 ```yaml
-# Dans compose.yaml
+# Dans docker-compose-all.yaml
 deploy:
   resources:
     limits:
@@ -1081,7 +1081,7 @@ docker run -d --label env=dev --label app=blogpress nginx
 # Filtrer par label
 docker ps --filter "label=env=dev"
 
-# Dans compose.yaml
+# Dans docker-compose-all.yaml
 labels:
   - "com.example.description=Blogpress API"
   - "com.example.version=1.0"
