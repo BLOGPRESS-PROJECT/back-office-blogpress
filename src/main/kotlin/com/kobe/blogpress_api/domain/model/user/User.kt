@@ -6,59 +6,70 @@ import org.springframework.data.mongodb.core.index.CompoundIndex
 import org.springframework.data.mongodb.core.index.Indexed
 import org.springframework.data.mongodb.core.mapping.Document
 import java.time.Instant
+import java.time.LocalDate
 
 @Document(collection = "users")
-@CompoundIndex(name = "idx_username_email", def = "{'username': 1, 'email': 1}")
 data class User(
     @Id
     val id: ObjectId = ObjectId(),
 
-    @Indexed(unique = true, name = "idx_username_unique")
+    @Indexed(unique = true)
     val username: String,
 
-    @Indexed(unique = true, name = "idx_email_unique")
+    @Indexed(unique = true)
     val email: String,
 
     val password: String,
 
     val firstName: String,
+
     val lastName: String,
 
+    // ===== NOUVEAUX CHAMPS - INFORMATIONS PERSONNELLES =====
+    val birthDate: LocalDate? = null,
+
+    val gender: Gender? = null,
+
+    val location: String? = null,
+
+    val phoneNumber: String? = null,
+
+    val interests: List<String> = emptyList(),
+
+    val preferredLanguage: String = "fr",
+
+    // ===== PROFIL PUBLIC =====
     val profilePicture: String? = null,
 
     val bio: String? = null,
 
-    @Indexed(name = "idx_role")
-    val role: Role = Role.USER,
+    val website: String? = null,
 
     val socialLinks: SocialLinks = SocialLinks(),
 
-    val statistics: UserStatistics = UserStatistics(),
+    // ===== RÔLE ET STATUT =====
+    val role: Role = Role.USER,
 
-    @Indexed(name = "idx_followers")
-    val followers: Set<ObjectId> = emptySet(),
-
-    @Indexed(name = "idx_following")
-    val following: Set<ObjectId> = emptySet(),
+    val isActive: Boolean = true,
 
     val isEmailVerified: Boolean = false,
 
-    @Indexed(name = "idx_is_active")
-    val isActive: Boolean = true,
+    // ===== STATISTIQUES =====
+    val statistics: UserStatistics = UserStatistics(),
 
-    @Indexed(name = "idx_created_at", direction = org.springframework.data.mongodb.core.index.IndexDirection.DESCENDING)
+    // ===== RELATIONS =====
+    val followers: Set<ObjectId> = emptySet(),
+
+    val following: Set<ObjectId> = emptySet(),
+
+    // ===== DATES =====
+    @Indexed
     val createdAt: Instant = Instant.now(),
 
     val updatedAt: Instant = Instant.now(),
 
     val lastLoginAt: Instant? = null
 )
-
-enum class Role {
-    ADMIN,      // Gère les utilisateurs
-    USER,       // Utilisateur connecté (CRUD sur ses contenus)
-    MODERATOR   // Modération
-}
 
 data class SocialLinks(
     val twitter: String? = null,
@@ -76,3 +87,9 @@ data class UserStatistics(
     val followerCount: Long = 0,
     val followingCount: Long = 0
 )
+
+enum class Role {
+    ADMIN,      // Gère les utilisateurs
+    USER,       // Utilisateur connecté (CRUD sur ses contenus)
+    MODERATOR   // Modération
+}

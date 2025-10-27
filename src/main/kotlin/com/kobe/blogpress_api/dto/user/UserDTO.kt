@@ -1,49 +1,12 @@
 package com.kobe.blogpress_api.dto.user
 
+import com.kobe.blogpress_api.domain.model.user.Gender
 import com.kobe.blogpress_api.domain.model.user.Role
 import com.kobe.blogpress_api.domain.model.user.SocialLinks
 import com.kobe.blogpress_api.domain.model.user.UserStatistics
-import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
-import jakarta.validation.constraints.Size
-import jakarta.validation.constraints.Pattern
 import java.time.Instant
-
-data class RegisterRequestDTO(
-    @field:NotBlank(message = "Username is required")
-    @field:Size(min = 3, max = 30, message = "Username must be between 3 and 30 characters")
-    @field:Pattern(
-        regexp = "^[a-zA-Z0-9_-]+$",
-        message = "Username can only contain letters, numbers, underscores and hyphens"
-    )
-    val username: String,
-
-    @field:NotBlank(message = "Email is required")
-    @field:Email(message = "Email must be valid")
-    val email: String,
-
-    @field:NotBlank(message = "Password is required")
-    @field:Size(min = 8, message = "Password must be at least 8 characters")
-    @field:Pattern(
-        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@\$!%*?&])[A-Za-z\\d@\$!%*?&]+\$",
-        message = "Password must contain at least one uppercase letter, one lowercase letter, one number and one special character"
-    )
-    val password: String,
-
-    @field:NotBlank(message = "First name is required")
-    @field:Size(min = 2, max = 50, message = "First name must be between 2 and 50 characters")
-    val firstName: String,
-
-    @field:NotBlank(message = "Last name is required")
-    @field:Size(min = 2, max = 50, message = "Last name must be between 2 and 50 characters")
-    val lastName: String,
-
-    @field:Size(max = 500, message = "Bio cannot exceed 500 characters")
-    val bio: String? = null,
-
-    // Photo de profil optionnelle (URL externe ou sera uploadée séparément)
-    val profilePictureUrl: String? = null
-)
+import java.time.LocalDate
 
 data class LoginRequestDTO(
     @field:NotBlank(message = "Email or username is required")
@@ -68,23 +31,27 @@ data class UserDTO(
     val firstName: String,
     val lastName: String,
     val fullName: String,
-    val profilePicture: String?,
-    val bio: String?,
-    val role: Role,
+
+    // NOUVEAUX CHAMPS
+    val birthDate: LocalDate? = null,
+    val age: Int? = null,
+    val gender: Gender? = null,
+    val location: String? = null,
+    val phoneNumber: String? = null,
+    val interests: List<String> = emptyList(),
+    val preferredLanguage: String = "fr",
+
+    val profilePicture: String? = null,
+    val bio: String? = null,
+    val website: String? = null,
     val socialLinks: SocialLinks,
-    val statistics: UserStatistics,
+    val role: Role,
     val isEmailVerified: Boolean,
+    val statistics: UserStatistics,
     val createdAt: Instant,
-    val lastLoginAt: Instant?
+    val lastLoginAt: Instant? = null
 )
 
 data class RefreshTokenRequestDTO(
     val refreshToken: String
-)
-
-data class UpdateProfileRequestDTO(
-    val firstName: String?,
-    val lastName: String?,
-    val bio: String?,
-    val socialLinks: SocialLinks?
 )
