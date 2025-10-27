@@ -58,6 +58,14 @@ class SecurityConfig(
                     // Upload d'images (public pour le moment, on sécurisera plus tard)
                     .pathMatchers(HttpMethod.GET, "/uploads/**").permitAll()
 
+                    // Upload d'images (authentifié)
+                    .pathMatchers(HttpMethod.POST, "/api/blogs/*/cover-image").authenticated()
+                    .pathMatchers(HttpMethod.POST, "/api/blogs/*/logo-image").authenticated()
+                    .pathMatchers(HttpMethod.DELETE, "/api/blogs/*/cover-image").authenticated()
+                    .pathMatchers(HttpMethod.DELETE, "/api/blogs/*/logo-image").authenticated()
+                    .pathMatchers(HttpMethod.POST, "/api/articles/*/cover-image").authenticated()
+                    .pathMatchers(HttpMethod.DELETE, "/api/articles/*/cover-image").authenticated()
+
                     // Documentation et health
                     .pathMatchers("/actuator/health", "/health").permitAll()
 
@@ -79,9 +87,12 @@ class SecurityConfig(
                     .pathMatchers(HttpMethod.GET, "/api/blogs/user").authenticated()
 
                     // Article management (création, modification, suppression)
-                    .pathMatchers(HttpMethod.POST, "/api/articles/**").authenticated()
+                    .pathMatchers(HttpMethod.POST, "/api/articles").authenticated()
+                    .pathMatchers(HttpMethod.POST, "/api/blogs/*/posts").authenticated()
                     .pathMatchers(HttpMethod.PUT, "/api/articles/**").authenticated()
                     .pathMatchers(HttpMethod.DELETE, "/api/articles/**").authenticated()
+                    .pathMatchers(HttpMethod.GET, "/api/articles/user").authenticated()
+
 
                     // Interactions authentifiées (likes, favorites)
                     .pathMatchers(HttpMethod.POST, "/api/content/*/like").authenticated()

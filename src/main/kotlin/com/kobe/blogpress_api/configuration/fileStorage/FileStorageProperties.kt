@@ -12,31 +12,57 @@ import java.nio.file.Paths
 import jakarta.annotation.PostConstruct
 
 @Component
-@ConfigurationProperties(prefix = "file")
+@ConfigurationProperties(prefix = "file.storage")
 data class FileStorageProperties(
-    var uploadDir: String = "uploads",
-    var maxSize: String = "5MB",
-    var allowedTypes: List<String> = listOf("image/jpeg", "image/png", "image/gif", "image/webp")
+    var basePath: String = "./uploads",
+    var maxFileSize: Long = 5242880, // 5MB en bytes
+    var allowedTypes: List<String> = listOf("image/jpeg", "image/png", "image/gif", "image/webp"),
+    var profilePicturesPath: String = "profile-pictures",
+    var blogCoversPath: String = "blog-covers",
+    var blogLogosPath: String = "blog-logos",
+    var articleCoversPath: String = "article-covers"
 ) {
-    fun getUploadPath(): Path = Paths.get(uploadDir).toAbsolutePath().normalize()
 
-    fun getProfilePicturesPath(): Path = getUploadPath().resolve("profile-pictures")
+    // Chemins absolus
+    fun getBasePath(): Path = Paths.get(basePath).toAbsolutePath().normalize()
+
+    fun getProfilePicturesPath(): Path = getBasePath().resolve(profilePicturesPath)
+
+    fun getBlogCoversPath(): Path = getBasePath().resolve(blogCoversPath)
+
+    fun getBlogLogosPath(): Path = getBasePath().resolve(blogLogosPath)
+
+    fun getArticleCoversPath(): Path = getBasePath().resolve(articleCoversPath)
 
     @PostConstruct
     fun init() {
-        Files.createDirectories(getUploadPath())
-        Files.createDirectories(getProfilePicturesPath())
+        // Créer tous les répertoires au démarrage
+        val directories = listOf(
+            getBasePath(),
+            getProfilePicturesPath(),
+            getBlogCoversPath(),
+            getBlogLogosPath(),
+            getArticleCoversPath()
+        )
+
+        directories.forEach { dir ->
+            if (!Files.exists(dir)) {
+                Files.createDirectories(dir)
+                println("✅ Created directory: $dir")
+            } else {
+                println("✓ Directory exists: $dir")
+            }
+        }
+
+        println("📁 File storage initialized at: ${getBasePath()}")
     }
-}
 
-@Configuration
-@EnableWebFlux
-class FileStorageConfig(
-    private val fileStorageProperties: FileStorageProperties
-) : WebFluxConfigurer {
+    // Méthodes utilitaires
+    fun isValidFileType(contentType: String): Boolean {
+        return allowedTypes.contains(contentType)
+    }
 
-    override fun addResourceHandlers(registry: ResourceHandlerRegistry) {
-        registry.addResourceHandler("/uploads/**")
-            .addResourceLocations("file:${fileStorageProperties.uploadDir}/")
+    fun getMaxFileSizeMB(): Double {
+        return maxFileSize / (1024.0 * 1024.0)
     }
 }

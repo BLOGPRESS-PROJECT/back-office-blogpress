@@ -9,8 +9,10 @@ import com.kobe.blogpress_api.dto.user.RegisterRequestDTO
 import com.kobe.blogpress_api.exception.AuthenticationException
 import com.kobe.blogpress_api.exception.ResourceAlreadyExistsException
 import com.kobe.blogpress_api.repository.user.UserRepository
+import com.kobe.blogpress_api.services.fileStorage.FileStorageService
 import kotlinx.coroutines.reactor.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
+import org.springframework.http.codec.multipart.FilePart
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -20,7 +22,8 @@ class AuthService(
     private val userRepository: UserRepository,
     private val passwordEncoder: PasswordEncoder,
     private val jwtService: JwtService,
-    private val userService: UserService
+    private val userService: UserService,
+    private val fileStorageService: FileStorageService
 ) {
 
     suspend fun register(registerRequest: RegisterRequestDTO): AuthResponseDTO {
@@ -33,6 +36,37 @@ class AuthService(
             firstName = registerRequest.firstName,
             lastName = registerRequest.lastName,
             bio = registerRequest.bio,
+            profilePicture = registerRequest.profilePictureUrl, // URL externe si fournie
+            role = Role.USER
+        )
+
+        val savedUser = userRepository.save(user).awaitSingle()
+        return generateAuthResponse(savedUser)
+    }
+
+    suspend fun registerWithProfilePicture(
+        registerRequest: RegisterRequestDTO,
+        profilePicture: FilePart?
+    ): AuthResponseDTO {
+        checkUserExists(registerRequest.email, registerRequest.username)
+
+        // Uploader la photo de profil si fournie
+        val profilePictureUrl = if (profilePicture != null) {
+            // Créer un ID temporaire pour l'upload
+            val tempUserId = java.util.UUID.randomUUID().toString()
+            fileStorageService.storeProfilePicture(profilePicture, tempUserId)
+        } else {
+            registerRequest.profilePictureUrl // URL externe si fournie
+        }
+
+        val user = User(
+            username = registerRequest.username.lowercase(),
+            email = registerRequest.email.lowercase(),
+            password = passwordEncoder.encode(registerRequest.password),
+            firstName = registerRequest.firstName,
+            lastName = registerRequest.lastName,
+            bio = registerRequest.bio,
+            profilePicture = profilePictureUrl,
             role = Role.USER
         )
 

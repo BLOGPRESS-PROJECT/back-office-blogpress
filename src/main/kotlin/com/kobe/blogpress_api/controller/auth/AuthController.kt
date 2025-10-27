@@ -9,7 +9,9 @@ import com.kobe.blogpress_api.services.user.AuthService
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
+import org.springframework.http.codec.multipart.FilePart
 import org.springframework.web.bind.annotation.*
 import java.util.*
 
@@ -29,6 +31,28 @@ class AuthController(
         logger.info("[$requestId] Register request for email: ${registerRequest.email}")
 
         val authResponse = authService.register(registerRequest)
+
+        logger.info("[$requestId] User registered successfully: ${authResponse.user.username}")
+        return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(
+                ApiResponseDto.success(
+                    data = authResponse,
+                    message = "User registered successfully",
+                    requestId = requestId
+                )
+            )
+    }
+
+    @PostMapping("/register", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    suspend fun registerWithProfilePicture(
+        @RequestPart("user") @Valid registerRequest: RegisterRequestDTO,
+        @RequestPart("profilePicture", required = false) profilePicture: FilePart?
+    ): ResponseEntity<ApiResponseDto<AuthResponseDTO>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] Register request for email: ${registerRequest.email}")
+
+        val authResponse = authService.registerWithProfilePicture(registerRequest, profilePicture)
 
         logger.info("[$requestId] User registered successfully: ${authResponse.user.username}")
         return ResponseEntity

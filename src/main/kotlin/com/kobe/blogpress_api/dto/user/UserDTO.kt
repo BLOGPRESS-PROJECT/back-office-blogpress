@@ -25,7 +25,7 @@ data class RegisterRequestDTO(
     @field:NotBlank(message = "Password is required")
     @field:Size(min = 8, message = "Password must be at least 8 characters")
     @field:Pattern(
-        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@\$!%*?&])[A-Za-z\\d@\$!%*?&]{8,}$",
+        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@\$!%*?&])[A-Za-z\\d@\$!%*?&]+\$",
         message = "Password must contain at least one uppercase letter, one lowercase letter, one number and one special character"
     )
     val password: String,
@@ -38,8 +38,11 @@ data class RegisterRequestDTO(
     @field:Size(min = 2, max = 50, message = "Last name must be between 2 and 50 characters")
     val lastName: String,
 
-    @field:Size(max = 500, message = "Bio must not exceed 500 characters")
-    val bio: String? = null
+    @field:Size(max = 500, message = "Bio cannot exceed 500 characters")
+    val bio: String? = null,
+
+    // Photo de profil optionnelle (URL externe ou sera uploadée séparément)
+    val profilePictureUrl: String? = null
 )
 
 data class LoginRequestDTO(

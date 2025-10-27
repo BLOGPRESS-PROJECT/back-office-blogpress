@@ -5,21 +5,19 @@ import com.kobe.blogpress_api.domain.interaction.Favorite
 import com.kobe.blogpress_api.domain.interaction.Like
 import com.kobe.blogpress_api.repository.interaction.FavoriteRepository
 import com.kobe.blogpress_api.repository.interaction.LikeRepository
+import com.kobe.blogpress_api.services.article.ArticleService
 import com.kobe.blogpress_api.services.blog.BlogService
 import kotlinx.coroutines.reactor.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import org.bson.types.ObjectId
 import org.springframework.stereotype.Service
 
-
-
 @Service
 class ContentInteractionService(
     private val likeRepository: LikeRepository,
     private val favoriteRepository: FavoriteRepository,
-    private val blogService: BlogService
-    // TODO: Injecter ArticleService quand il sera créé
-    // private val articleService: ArticleService
+    private val blogService: BlogService,
+    private val articleService: ArticleService
 ) {
 
     suspend fun toggleLike(contentId: ObjectId, userId: ObjectId, contentType: ContentType): LikeResponse {
@@ -30,8 +28,6 @@ class ContentInteractionService(
         return if (existingLike != null) {
             // Unlike
             likeRepository.delete(existingLike).awaitSingleOrNull()
-
-            // Décrémenter le compteur
             decrementLikeCount(contentId, contentType)
 
             val count = likeRepository.countByContentIdAndContentType(contentId, contentType).awaitSingle()
@@ -48,8 +44,6 @@ class ContentInteractionService(
                 userId = userId
             )
             likeRepository.save(like).awaitSingle()
-
-            // Incrémenter le compteur
             incrementLikeCount(contentId, contentType)
 
             val count = likeRepository.countByContentIdAndContentType(contentId, contentType).awaitSingle()
@@ -69,8 +63,6 @@ class ContentInteractionService(
         return if (existingFavorite != null) {
             // Unfavorite
             favoriteRepository.delete(existingFavorite).awaitSingleOrNull()
-
-            // Décrémenter le compteur
             decrementFavoriteCount(contentId, contentType)
 
             FavoriteResponse(
@@ -85,8 +77,6 @@ class ContentInteractionService(
                 userId = userId
             )
             favoriteRepository.save(favorite).awaitSingle()
-
-            // Incrémenter le compteur
             incrementFavoriteCount(contentId, contentType)
 
             FavoriteResponse(
@@ -99,10 +89,7 @@ class ContentInteractionService(
     suspend fun incrementView(contentId: ObjectId, contentType: ContentType) {
         when (contentType) {
             ContentType.BLOG -> blogService.incrementViewCount(contentId)
-            ContentType.ARTICLE -> {
-                // Sera implémenté quand ArticleService sera créé
-                throw UnsupportedOperationException("Article interactions not yet implemented")
-            }
+            ContentType.ARTICLE -> articleService.incrementViewCount(contentId)
         }
     }
 
@@ -118,50 +105,42 @@ class ContentInteractionService(
                 )
             }
             ContentType.ARTICLE -> {
-                // Sera implémenté quand ArticleService sera créé
-                throw UnsupportedOperationException("Article interactions not yet implemented")
+                articleService.incrementShareCount(contentId)
+                val article = articleService.getArticleById(contentId)
+                return ShareResponse(
+                    contentId = contentId.toHexString(),
+                    shareCount = article.shareCount,
+                    shareUrl = article.publicUrl
+                )
             }
         }
     }
 
-    // Méthodes privées pour incrémenter/décrémenter les compteurs
     private suspend fun incrementLikeCount(contentId: ObjectId, contentType: ContentType) {
         when (contentType) {
             ContentType.BLOG -> blogService.incrementLikeCount(contentId)
-            ContentType.ARTICLE -> {
-                // Sera implémenté quand ArticleService sera créé
-                // articleService.incrementLikeCount(contentId)
-            }
+            ContentType.ARTICLE -> articleService.incrementLikeCount(contentId)
         }
     }
 
     private suspend fun decrementLikeCount(contentId: ObjectId, contentType: ContentType) {
         when (contentType) {
             ContentType.BLOG -> blogService.decrementLikeCount(contentId)
-            ContentType.ARTICLE -> {
-                // Sera implémenté quand ArticleService sera créé
-                // articleService.decrementLikeCount(contentId)
-            }
+            ContentType.ARTICLE -> articleService.decrementLikeCount(contentId)
         }
     }
 
     private suspend fun incrementFavoriteCount(contentId: ObjectId, contentType: ContentType) {
         when (contentType) {
             ContentType.BLOG -> blogService.incrementFavoriteCount(contentId)
-            ContentType.ARTICLE -> {
-                // Sera implémenté quand ArticleService sera créé
-                // articleService.incrementFavoriteCount(contentId)
-            }
+            ContentType.ARTICLE -> {} // Articles n'ont pas de favoris pour l'instant
         }
     }
 
     private suspend fun decrementFavoriteCount(contentId: ObjectId, contentType: ContentType) {
         when (contentType) {
             ContentType.BLOG -> blogService.decrementFavoriteCount(contentId)
-            ContentType.ARTICLE -> {
-                // Sera implémenté quand ArticleService sera créé
-                // articleService.decrementFavoriteCount(contentId)
-            }
+            ContentType.ARTICLE -> {} // Articles n'ont pas de favoris pour l'instant
         }
     }
 }
