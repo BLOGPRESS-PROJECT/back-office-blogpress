@@ -191,4 +191,45 @@ class UserController(
             )
         )
     }
+
+    @PostMapping("/{userId}/promote-golden")
+    suspend fun promoteToGoldenUser(
+        @AuthenticationPrincipal adminId: String,
+        @PathVariable userId: String
+    ): ResponseEntity<ApiResponseDto<UserDTO>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] Promote user $userId to Golden by admin $adminId")
+
+        val user = userService.promoteToGoldenUser(ObjectId(userId), ObjectId(adminId))
+
+        logger.info("[$requestId] User $userId promoted to Golden User")
+        return ResponseEntity.ok(
+            ApiResponseDto.success(
+                data = userService.toDTO(user),
+                message = "User promoted to Golden User successfully",
+                requestId = requestId
+            )
+        )
+    }
+
+    @PostMapping("/{userId}/revoke-golden")
+    suspend fun revokeGoldenUser(
+        @AuthenticationPrincipal adminId: String,
+        @PathVariable userId: String
+    ): ResponseEntity<ApiResponseDto<UserDTO>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] Revoke Golden status for user $userId by admin $adminId")
+
+        val user = userService.revokeGoldenUser(ObjectId(userId), ObjectId(adminId))
+
+        logger.info("[$requestId] Golden status revoked for user $userId")
+        return ResponseEntity.ok(
+            ApiResponseDto.success(
+                data = userService.toDTO(user),
+                message = "Golden User status revoked successfully",
+                requestId = requestId
+            )
+        )
+    }
+
 }

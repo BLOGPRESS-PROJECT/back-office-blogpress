@@ -40,6 +40,8 @@ data class UserDTO(
     val phoneNumber: String? = null,
     val interests: List<String> = emptyList(),
     val preferredLanguage: String = "fr",
+    val isGoldenUser: Boolean = false,
+    val goldenUserSince: Instant? = null,
 
     val profilePicture: String? = null,
     val bio: String? = null,

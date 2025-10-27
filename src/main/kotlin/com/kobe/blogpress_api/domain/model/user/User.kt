@@ -39,6 +39,8 @@ data class User(
     val role: Role = Role.USER,
     val isActive: Boolean = true,
     val isEmailVerified: Boolean = false,
+    val isGoldenUser: Boolean = false, // Utilisateur premium avec privilèges spéciaux
+    val goldenUserSince: Instant? = null, // Date d'obtention du statut Golden
 
     // ===== STATISTIQUES =====
     val statistics: UserStatistics = UserStatistics(),

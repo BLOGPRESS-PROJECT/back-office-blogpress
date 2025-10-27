@@ -1,5 +1,6 @@
 package com.kobe.blogpress_api.services.user
 
+import com.kobe.blogpress_api.domain.model.user.Role
 import com.kobe.blogpress_api.domain.model.user.User
 import com.kobe.blogpress_api.dto.user.UpdateProfileRequestDTO
 import com.kobe.blogpress_api.dto.user.UserDTO
@@ -127,6 +128,58 @@ class UserService(
         return Pair(savedFollower, savedFollowing)
     }
 
+    // Promouvoir un utilisateur en Golden User (ADMIN seulement)
+    suspend fun promoteToGoldenUser(userId: ObjectId, adminId: ObjectId): User {
+        // Vérifier que l'admin a le droit
+        val admin = findById(adminId)
+        if (admin.role != Role.ADMIN) {
+            throw IllegalArgumentException("Only admins can promote users to Golden status")
+        }
+
+        val user = findById(userId)
+
+        if (user.isGoldenUser) {
+            throw IllegalStateException("User is already a Golden User")
+        }
+
+        val updatedUser = user.copy(
+            isGoldenUser = true,
+            goldenUserSince = Instant.now(),
+            updatedAt = Instant.now()
+        )
+
+        return userRepository.save(updatedUser).awaitSingle()
+    }
+
+    // Révoquer le statut Golden User (ADMIN seulement)
+    suspend fun revokeGoldenUser(userId: ObjectId, adminId: ObjectId): User {
+        // Vérifier que l'admin a le droit
+        val admin = findById(adminId)
+        if (admin.role != Role.ADMIN) {
+            throw IllegalArgumentException("Only admins can revoke Golden status")
+        }
+
+        val user = findById(userId)
+
+        if (!user.isGoldenUser) {
+            throw IllegalStateException("User is not a Golden User")
+        }
+
+        val updatedUser = user.copy(
+            isGoldenUser = false,
+            goldenUserSince = null,
+            updatedAt = Instant.now()
+        )
+
+        return userRepository.save(updatedUser).awaitSingle()
+    }
+
+    // Vérifier si un utilisateur est Golden
+    suspend fun isGoldenUser(userId: ObjectId): Boolean {
+        val user = findById(userId)
+        return user.isGoldenUser
+    }
+
     // Ajoute cette méthode
     fun toDTO(user: User): UserDTO {
         return UserDTO(
@@ -139,6 +192,8 @@ class UserService(
             birthDate = user.birthDate,
             age = user.birthDate?.let { calculateAge(it) },
             gender = user.gender,
+            isGoldenUser = user.isGoldenUser,
+            goldenUserSince = user.goldenUserSince,
             country = user.country,
             phoneNumber = user.phoneNumber,
             interests = user.interests,

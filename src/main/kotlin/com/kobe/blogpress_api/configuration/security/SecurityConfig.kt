@@ -72,6 +72,10 @@ class SecurityConfig(
                     // ===== ROUTES ADMIN =====
                     .pathMatchers("/api/admin/**").hasRole("ADMIN")
 
+                    // Golden User management (ADMIN only)
+                    .pathMatchers("/api/users/*/promote-golden").hasRole("ADMIN")
+                    .pathMatchers("/api/users/*/revoke-golden").hasRole("ADMIN")
+
                     // ===== ROUTES UTILISATEUR AUTHENTIFIÉ =====
                     // User management
                     .pathMatchers("/api/users/me/**").authenticated()
