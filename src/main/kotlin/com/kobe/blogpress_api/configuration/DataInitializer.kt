@@ -1,5 +1,6 @@
 package com.kobe.blogpress_api.configuration
 
+import com.kobe.blogpress_api.domain.model.user.Gender
 import com.kobe.blogpress_api.domain.model.user.Role
 import com.kobe.blogpress_api.domain.model.user.User
 import com.kobe.blogpress_api.repository.user.UserRepository
@@ -49,9 +50,12 @@ class DataInitializer(
                         lastName = adminLastName,
                         role = Role.ADMIN,
                         isEmailVerified = true,
-                        bio = "Default system administrator"
+                        bio = "Default system administrator",
+                        isActive = true,
+                        gender = Gender.MALE,
                     )
                     userRepository.save(adminUser)
+
                 }
             )
             .doOnSuccess { user ->
