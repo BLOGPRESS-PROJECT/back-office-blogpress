@@ -50,6 +50,8 @@ class SecurityConfig(
                     .pathMatchers(HttpMethod.GET, "/api/posts", "/api/posts/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/users/profile/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/users/username/**").permitAll()
+                    // Recherche publique
+                    .pathMatchers(HttpMethod.GET, "/api/search", "/api/search/**").permitAll()
 
                     // Interactions publiques (views, shares - pas besoin d'auth)
                     .pathMatchers(HttpMethod.POST, "/api/content/*/view").permitAll()

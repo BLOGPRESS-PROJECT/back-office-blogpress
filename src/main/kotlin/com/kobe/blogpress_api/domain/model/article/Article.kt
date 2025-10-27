@@ -10,7 +10,8 @@ import java.time.Instant
 
 @Document(collection = "articles")
 @CompoundIndexes(
-    CompoundIndex(name = "blog_slug_idx", def = "{'blogId': 1, 'slug': 1}", unique = true, sparse = true)
+    CompoundIndex(name = "blog_slug_idx", def = "{'blogId': 1, 'slug': 1}", unique = true, sparse = true),
+    CompoundIndex(name = "text_search_idx", def = "{'title': 'text', 'content': 'text', 'excerpt': 'text'}")
 )
 data class Article(
     @Id

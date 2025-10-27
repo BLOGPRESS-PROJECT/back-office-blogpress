@@ -2,11 +2,16 @@ package com.kobe.blogpress_api.domain.model.blog
 
 import org.bson.types.ObjectId
 import org.springframework.data.annotation.Id
+import org.springframework.data.mongodb.core.index.CompoundIndex
+import org.springframework.data.mongodb.core.index.CompoundIndexes
 import org.springframework.data.mongodb.core.index.Indexed
 import org.springframework.data.mongodb.core.mapping.Document
 import java.time.Instant
 
 @Document(collection = "blogs")
+@CompoundIndexes(
+    CompoundIndex(name = "text_search_idx", def = "{'title': 'text', 'description': 'text'}")
+)
 data class Blog(
     @Id
     val id: ObjectId = ObjectId(),
