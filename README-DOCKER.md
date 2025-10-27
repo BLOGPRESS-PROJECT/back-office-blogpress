@@ -18,13 +18,13 @@ cp .env.example .env
 # Éditer .env selon tes besoins
 
 # Démarrer tout
-docker compose -f docker-compose-all.yaml up --build -d
+docker compose -f compose.yaml up --build -d
 
 # Voir les logs
-docker compose -f docker-compose-all.yaml logs -f
+docker compose -f compose.yaml logs -f
 
 # Arrêter tout
-docker compose -f docker-compose-all.yaml down
+docker compose -f compose.yaml down
 ```
 
 ### Option 2 : Démarrer service par service
@@ -62,7 +62,7 @@ cd ../..
 
 ### Rebuild de l'API
 ```bash
-docker compose -f docker-compose-all.yaml up --build api
+docker compose -f compose.yaml up --build api
 ```
 
 ## 🗄️ Gestion des données
@@ -94,7 +94,7 @@ docker exec blogpress-mongodb mongorestore \
 ### Nettoyer les volumes
 ```bash
 # ⚠️ ATTENTION : Supprime toutes les données
-docker compose -f docker-compose-all.yaml down -v
+docker compose -f compose.yaml down -v
 ```
 
 ## 📊 Monitoring
@@ -102,13 +102,13 @@ docker compose -f docker-compose-all.yaml down -v
 ### Vérifier la santé des services
 ```bash
 docker ps
-docker compose -f docker-compose-all.yaml ps
+docker compose -f compose.yaml ps
 ```
 
 ### Logs
 ```bash
 # Tous les services
-docker compose -f docker-compose-all.yaml logs -f
+docker compose -f compose.yaml logs -f
 
 # Service spécifique
 docker logs -f blogpress-api
@@ -144,7 +144,7 @@ docker exec -it blogpress-mongodb mongosh \
 ### Déployer en production
 ```bash
 # Utiliser le profil prod
-SPRING_PROFILE=prod docker compose -f docker-compose-all.yaml up --build -d
+SPRING_PROFILE=prod docker compose -f compose.yaml up --build -d
 ```
 
 ## 🐛 Troubleshooting
@@ -171,7 +171,7 @@ docker network create blogpress-network
 
 ### Reset complet
 ```bash
-docker compose -f docker-compose-all.yaml down -v
+docker compose -f compose.yaml down -v
 docker system prune -a
-docker compose -f docker-compose-all.yaml up --build
+docker compose -f compose.yaml up --build
 ```
