@@ -10,6 +10,7 @@ import kotlinx.coroutines.reactor.awaitSingleOrNull
 import org.bson.types.ObjectId
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.time.LocalDate
 
 @Service
 class UserService(
@@ -32,7 +33,14 @@ class UserService(
         val updatedUser = user.copy(
             firstName = updateRequest.firstName ?: user.firstName,
             lastName = updateRequest.lastName ?: user.lastName,
+            birthDate = updateRequest.birthDate ?: user.birthDate,
+            gender = updateRequest.gender ?: user.gender,
+            location = updateRequest.location ?: user.location,
+            phoneNumber = updateRequest.phoneNumber ?: user.phoneNumber,
+            interests = updateRequest.interests ?: user.interests,
+            preferredLanguage = updateRequest.preferredLanguage ?: user.preferredLanguage,
             bio = updateRequest.bio ?: user.bio,
+            website = updateRequest.website ?: user.website,
             socialLinks = updateRequest.socialLinks ?: user.socialLinks,
             updatedAt = Instant.now()
         )
@@ -119,6 +127,7 @@ class UserService(
         return Pair(savedFollower, savedFollowing)
     }
 
+    // Ajoute cette méthode
     fun toDTO(user: User): UserDTO {
         return UserDTO(
             id = user.id.toHexString(),
@@ -127,14 +136,27 @@ class UserService(
             firstName = user.firstName,
             lastName = user.lastName,
             fullName = "${user.firstName} ${user.lastName}",
+            birthDate = user.birthDate,
+            age = user.birthDate?.let { calculateAge(it) },
+            gender = user.gender,
+            location = user.location,
+            phoneNumber = user.phoneNumber,
+            interests = user.interests,
+            preferredLanguage = user.preferredLanguage,
             profilePicture = user.profilePicture,
             bio = user.bio,
-            role = user.role,
+            website = user.website,
             socialLinks = user.socialLinks,
-            statistics = user.statistics,
+            role = user.role,
             isEmailVerified = user.isEmailVerified,
+            statistics = user.statistics,
             createdAt = user.createdAt,
             lastLoginAt = user.lastLoginAt
         )
+    }
+
+    // Ajoute cette méthode helper
+    private fun calculateAge(birthDate: LocalDate): Int {
+        return java.time.Period.between(birthDate, LocalDate.now()).years
     }
 }

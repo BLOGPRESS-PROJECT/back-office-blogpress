@@ -2,6 +2,7 @@ package com.kobe.blogpress_api.services.user
 
 import com.kobe.blogpress_api.configuration.security.jwt.JwtService
 import com.kobe.blogpress_api.domain.model.user.Role
+import com.kobe.blogpress_api.domain.model.user.SocialLinks
 import com.kobe.blogpress_api.domain.model.user.User
 import com.kobe.blogpress_api.dto.user.AuthResponseDTO
 import com.kobe.blogpress_api.dto.user.LoginRequestDTO
@@ -35,8 +36,24 @@ class AuthService(
             password = passwordEncoder.encode(registerRequest.password),
             firstName = registerRequest.firstName,
             lastName = registerRequest.lastName,
+            birthDate = registerRequest.birthDate,
+            gender = registerRequest.gender,
+            location = registerRequest.location,
+            phoneNumber = registerRequest.phoneNumber,
+            interests = registerRequest.interests ?: emptyList(),
+            preferredLanguage = registerRequest.preferredLanguage ?: "fr",
             bio = registerRequest.bio,
-            profilePicture = registerRequest.profilePictureUrl, // URL externe si fournie
+            website = registerRequest.website,
+            profilePicture = registerRequest.profilePictureUrl,
+            socialLinks = registerRequest.socialLinks?.let {
+                SocialLinks(
+                    twitter = it.twitter,
+                    linkedin = it.linkedin,
+                    github = it.github,
+                    facebook = it.facebook,
+                    instagram = it.instagram
+                )
+            } ?: SocialLinks(),
             role = Role.USER
         )
 
@@ -50,13 +67,11 @@ class AuthService(
     ): AuthResponseDTO {
         checkUserExists(registerRequest.email, registerRequest.username)
 
-        // Uploader la photo de profil si fournie
         val profilePictureUrl = if (profilePicture != null) {
-            // Créer un ID temporaire pour l'upload
             val tempUserId = java.util.UUID.randomUUID().toString()
             fileStorageService.storeProfilePicture(profilePicture, tempUserId)
         } else {
-            registerRequest.profilePictureUrl // URL externe si fournie
+            registerRequest.profilePictureUrl
         }
 
         val user = User(
@@ -65,8 +80,24 @@ class AuthService(
             password = passwordEncoder.encode(registerRequest.password),
             firstName = registerRequest.firstName,
             lastName = registerRequest.lastName,
+            birthDate = registerRequest.birthDate,
+            gender = registerRequest.gender,
+            location = registerRequest.location,
+            phoneNumber = registerRequest.phoneNumber,
+            interests = registerRequest.interests ?: emptyList(),
+            preferredLanguage = registerRequest.preferredLanguage ?: "fr",
             bio = registerRequest.bio,
+            website = registerRequest.website,
             profilePicture = profilePictureUrl,
+            socialLinks = registerRequest.socialLinks?.let {
+                SocialLinks(
+                    twitter = it.twitter,
+                    linkedin = it.linkedin,
+                    github = it.github,
+                    facebook = it.facebook,
+                    instagram = it.instagram
+                )
+            } ?: SocialLinks(),
             role = Role.USER
         )
 

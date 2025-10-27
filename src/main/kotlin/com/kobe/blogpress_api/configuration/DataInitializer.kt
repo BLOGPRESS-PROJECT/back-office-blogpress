@@ -18,7 +18,7 @@ class DataInitializer(
     @Value("\${admin.password}") private val adminPassword: String,
     @Value("\${admin.username}") private val adminUsername: String,
     @Value("\${admin.firstname}") private val adminFirstName: String,
-    @Value("\${admin.lastname}") private val adminLastName: String
+    @Value("\${admin.lastname}") private val adminLastName: String,
 ) {
 
     private val logger = LoggerFactory.getLogger(DataInitializer::class.java)
