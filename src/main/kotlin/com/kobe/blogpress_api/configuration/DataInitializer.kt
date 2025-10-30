@@ -64,5 +64,6 @@ class DataInitializer(
                     logger.info("Admin user exists: ${user.email}")
                 }
             }
+
     }
 }

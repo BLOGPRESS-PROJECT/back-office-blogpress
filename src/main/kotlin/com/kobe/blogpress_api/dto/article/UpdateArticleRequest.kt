@@ -12,7 +12,6 @@ data class UpdateArticleRequest(
 
     @field:Size(max = 500, message = "Le résumé ne peut pas dépasser 500 caractères")
     val excerpt: String? = null,
-
     val coverImageUrl: String? = null,
 
     @field:Size(max = 10, message = "Maximum 10 tags autorisés")
@@ -20,10 +19,7 @@ data class UpdateArticleRequest(
 
     @field:Size(max = 50, message = "La catégorie ne peut pas dépasser 50 caractères")
     val category: String? = null,
-
     val isPublished: Boolean? = null,
-
     val isPrivate: Boolean? = null,
-
     val publishAt: Instant? = null
 )
