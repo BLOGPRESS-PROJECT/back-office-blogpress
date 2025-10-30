@@ -68,6 +68,7 @@ class BlogService(
             slug = newSlug,
             logoImageUrl = request.logoImageUrl ?: blog.logoImageUrl,
             coverImageUrl = request.coverImageUrl ?: blog.coverImageUrl,
+            tags = request.tags ?: emptyList(),
             isPublished = request.isPublished ?: blog.isPublished,
             isPrivate = request.isPrivate ?: blog.isPrivate,
             publishAt = request.publishAt ?: blog.publishAt,
@@ -184,6 +185,7 @@ class BlogService(
             slug = blog.slug,
             logoImageUrl = blog.logoImageUrl,
             coverImageUrl = blog.coverImageUrl,
+            tags = blog.tags,
             authorId = blog.authorId.toHexString(),
             isPublished = blog.isPublished,
             isPrivate = blog.isPrivate,
@@ -195,7 +197,7 @@ class BlogService(
             viewCount = blog.viewCount,
             likeCount = blog.likeCount,
             shareCount = blog.shareCount,
-            favoriteCount = blog.favoriteCount
+            favoriteCount = blog.favoriteCount,
         )
     }
 
@@ -207,6 +209,7 @@ class BlogService(
             slug = blog.slug,
             logoImageUrl = blog.logoImageUrl,
             coverImageUrl = blog.coverImageUrl,
+            tags = blog.tags,
             authorId = blog.authorId.toHexString(),
             isPublished = blog.isPublished,
             isPrivate = blog.isPrivate,

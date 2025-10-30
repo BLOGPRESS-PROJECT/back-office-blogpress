@@ -9,6 +9,7 @@ data class BlogResponse(
     val slug: String,
     val logoImageUrl: String?,
     val coverImageUrl: String?,
+    val tags: List<String>,
     val authorId: String,
     val isPublished: Boolean,
     val isPrivate: Boolean,

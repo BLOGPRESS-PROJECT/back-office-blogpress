@@ -18,6 +18,9 @@ data class Blog(
     val title: String,
     val description: String? = null,
 
+    @Indexed
+    val tags: List<String> = emptyList(),
+
     @Indexed(unique = true)
     val slug: String,
     val logoImageUrl: String? = null,

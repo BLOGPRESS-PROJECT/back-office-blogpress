@@ -1,5 +1,6 @@
 package com.kobe.blogpress_api.dto.blog
 
+import jakarta.validation.constraints.Size
 import java.time.Instant
 
 data class BlogSummaryDto(
@@ -9,6 +10,7 @@ data class BlogSummaryDto(
     val slug: String,
     val logoImageUrl: String?,
     val coverImageUrl: String?,
+    val tags: List<String>?,
     val authorId: String,
     val isPublished: Boolean,
     val isPrivate: Boolean,

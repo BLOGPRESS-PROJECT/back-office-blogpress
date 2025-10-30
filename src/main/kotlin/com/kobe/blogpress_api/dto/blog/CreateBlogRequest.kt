@@ -12,6 +12,9 @@ data class CreateBlogRequest(
     @field:Size(max = 500, message = "La description ne peut pas dépasser 500 caractères")
     val description: String? = null,
 
+    @field:Size(max = 10, message = "Maximum 10 tags autorisés")
+    val tags: List<String>? = null,
+
     val logoImageUrl: String? = null,
 
     val coverImageUrl: String? = null,
