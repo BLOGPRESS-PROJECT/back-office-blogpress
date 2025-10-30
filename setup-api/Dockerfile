@@ -7,19 +7,19 @@ FROM gradle:8.5-jdk21 AS build
 WORKDIR /app
 
 # Copier uniquement les fichiers de configuration Gradle
-COPY build.gradle.kts settings.gradle.kts gradle.properties ./
+COPY build.gradle.kts settings.gradle.kts ./
 COPY gradle ./gradle
 
 # Télécharger les dépendances (cache Docker)
 RUN gradle dependencies --no-daemon --quiet || true
 
-# Copier le code source
+# Copier le code source (inclut src/main/resources/application.properties)
 COPY src ./src
 
 # Build l'application
 RUN gradle clean bootJar --no-daemon --quiet
 
-# Vérifier le JAR
+# Vérifier que le JAR a été créé
 RUN ls -lh /app/build/libs/ && \
     test -f /app/build/libs/*.jar || (echo "❌ JAR not found!" && exit 1)
 
@@ -33,26 +33,26 @@ LABEL maintainer="blogpress@example.com"
 LABEL version="1.0"
 LABEL description="Blogpress API - Spring Boot Application"
 
-# Installer curl pour healthcheck
+# Installer curl pour healthcheck et configurer timezone
 RUN apk add --no-cache curl tzdata && \
     cp /usr/share/zoneinfo/Africa/Douala /etc/localtime && \
     echo "Africa/Douala" > /etc/timezone
 
-# Créer utilisateur non-root
+# Créer utilisateur non-root pour la sécurité
 RUN addgroup -S spring && \
     adduser -S spring -G spring
 
 # Répertoire de travail
 WORKDIR /app
 
-# Créer les dossiers nécessaires
+# Créer les dossiers pour les uploads
 RUN mkdir -p /app/uploads/profile-pictures \
              /app/uploads/blog-covers \
              /app/uploads/blog-logos \
              /app/uploads/article-covers && \
     chown -R spring:spring /app
 
-# Copier le JAR
+# Copier le JAR depuis l'étape de build
 COPY --from=build --chown=spring:spring /app/build/libs/*.jar app.jar
 
 # Utiliser l'utilisateur non-root
