@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   api:
     build:
@@ -30,9 +28,9 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
 
       # Admin
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@blogpress.com}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@2025}
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-bendjibril789@gmail.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-azerty@78942004}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-Azerty_78}
       ADMIN_FIRSTNAME: ${ADMIN_FIRSTNAME:-Super}
       ADMIN_LASTNAME: ${ADMIN_LASTNAME:-Admin}
 
