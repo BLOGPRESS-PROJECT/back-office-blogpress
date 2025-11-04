@@ -2,6 +2,7 @@ package com.kobe.blogpress_api.configuration.security
 
 import com.kobe.blogpress_api.configuration.security.jwt.JwtAuthenticationManager
 import com.kobe.blogpress_api.configuration.security.jwt.JwtServerAuthenticationConverter
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpMethod
@@ -23,7 +24,11 @@ import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource
 @EnableReactiveMethodSecurity
 class SecurityConfig(
     private val jwtAuthenticationManager: JwtAuthenticationManager,
-    private val jwtServerAuthenticationConverter: JwtServerAuthenticationConverter
+    private val jwtServerAuthenticationConverter: JwtServerAuthenticationConverter,
+
+    // ✅ Injecter les URLs configurables
+    @Value("\${app.frontend-url}") private val frontendUrl: String,
+    @Value("\${app.allowed-origins:http://localhost:3000}") private val allowedOrigins: String
 ) {
 
     @Bean
@@ -50,17 +55,18 @@ class SecurityConfig(
                     .pathMatchers(HttpMethod.GET, "/api/posts", "/api/posts/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/users/profile/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/users/username/**").permitAll()
+
                     // Recherche publique
                     .pathMatchers(HttpMethod.GET, "/api/search", "/api/search/**").permitAll()
 
-                    // Interactions publiques (views, shares - pas besoin d'auth)
+                    // Interactions publiques (views, shares)
                     .pathMatchers(HttpMethod.POST, "/api/content/*/view").permitAll()
                     .pathMatchers(HttpMethod.POST, "/api/content/*/share").permitAll()
 
-                    // Upload d'images (public pour le moment, on sécurisera plus tard)
+                    // Upload d'images (public pour lecture)
                     .pathMatchers(HttpMethod.GET, "/uploads/**").permitAll()
 
-                    // Upload d'images (authentifié)
+                    // Upload d'images (authentifié pour écriture)
                     .pathMatchers(HttpMethod.POST, "/api/blogs/*/cover-image").authenticated()
                     .pathMatchers(HttpMethod.POST, "/api/blogs/*/logo-image").authenticated()
                     .pathMatchers(HttpMethod.DELETE, "/api/blogs/*/cover-image").authenticated()
@@ -86,21 +92,20 @@ class SecurityConfig(
                     .pathMatchers("/api/users/follow/**").authenticated()
                     .pathMatchers("/api/users/unfollow/**").authenticated()
 
-                    // Blog management (création, modification, suppression)
+                    // Blog management
                     .pathMatchers(HttpMethod.POST, "/api/blogs").authenticated()
                     .pathMatchers(HttpMethod.PUT, "/api/blogs/**").authenticated()
                     .pathMatchers(HttpMethod.DELETE, "/api/blogs/**").authenticated()
                     .pathMatchers(HttpMethod.GET, "/api/blogs/user").authenticated()
 
-                    // Article management (création, modification, suppression)
+                    // Article management
                     .pathMatchers(HttpMethod.POST, "/api/articles").authenticated()
                     .pathMatchers(HttpMethod.POST, "/api/blogs/*/posts").authenticated()
                     .pathMatchers(HttpMethod.PUT, "/api/articles/**").authenticated()
                     .pathMatchers(HttpMethod.DELETE, "/api/articles/**").authenticated()
                     .pathMatchers(HttpMethod.GET, "/api/articles/user").authenticated()
 
-
-                    // Interactions authentifiées (likes, favorites)
+                    // Interactions authentifiées
                     .pathMatchers(HttpMethod.POST, "/api/content/*/like").authenticated()
                     .pathMatchers(HttpMethod.DELETE, "/api/content/*/like").authenticated()
                     .pathMatchers(HttpMethod.POST, "/api/content/*/favorite").authenticated()
@@ -115,8 +120,16 @@ class SecurityConfig(
 
     @Bean
     fun corsConfigurationSource(): CorsConfigurationSource {
+        // ✅ Parser les origins depuis la propriété (séparés par des virgules)
+        val origins = allowedOrigins.split(",").map { it.trim() }
+
+        println("🌐 CORS - Allowed Origins: $origins")
+        println("🌐 CORS - Frontend URL: $frontendUrl")
+
         val configuration = CorsConfiguration().apply {
-            allowedOriginPatterns = listOf("*")
+            // ✅ Utiliser les origins configurés
+            allowedOrigins = origins
+
             allowedMethods = listOf("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
             allowedHeaders = listOf("*")
             exposedHeaders = listOf("Authorization", "X-Total-Count")
@@ -132,16 +145,3 @@ class SecurityConfig(
     @Bean
     fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
 }
-
-/*
-* bon je veux une architechture un peu comme ca :
-* creer un directory pour blogpress-db, blogpress-api
-*
-* setup/blogpress-db/-docker-compose-db.yaml, -env-db
-* setup/blogpress-api/ dokcer-compose-api.yaml, -env-api
-*
-*
-*
-*
-*
-* */
