@@ -4,55 +4,79 @@ services:
       context: ..
       dockerfile: setup-api/Dockerfile
       args:
-        BUILD_DATE: ${BUILD_DATE:-2025-01-01}
+        BUILD_DATE: ${BUILD_DATE:-2025-11-04}
         VERSION: ${VERSION:-1.0.0}
     image: blogpress-api:${VERSION:-latest}
     container_name: blogpress-api
     restart: unless-stopped
     ports:
       - "${API_PORT:-8090}:8090"
+
+    # Charger toutes les variables du .env
+    env_file:
+      - .env
+
+    # Variables d'environnement
     environment:
       # Spring
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILE:-docker}
 
-      # MongoDB - ✅ CORRECTION : utiliser le nom du container "blogpress-mongodb"
-      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-qwerty87}@blogpress-mongodb:27017/${MONGO_DATABASE:-blogpress}?authSource=admin
+      # URLs
+      APP_BASE_URL: ${APP_BASE_URL}
+      APP_FRONTEND_URL: ${APP_FRONTEND_URL}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+
+      # MongoDB
+      SPRING_DATA_MONGODB_URI: ${SPRING_DATA_MONGODB_URI}
+      MONGO_AUTO_INDEX: ${MONGO_AUTO_INDEX}
 
       # JWT
       JWT_SECRET: ${JWT_SECRET}
-      JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION:-3600000}
-      JWT_REFRESH_TOKEN_EXPIRATION: ${JWT_REFRESH_TOKEN_EXPIRATION:-604800000}
-
-      # URLs
-      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8090}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION}
+      JWT_REFRESH_TOKEN_EXPIRATION: ${JWT_REFRESH_TOKEN_EXPIRATION}
 
       # Admin
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-bendjibril789@gmail.com}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-azerty@78942004}
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-Azerty_78}
-      ADMIN_FIRSTNAME: ${ADMIN_FIRSTNAME:-Super}
-      ADMIN_LASTNAME: ${ADMIN_LASTNAME:-Admin}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
+      ADMIN_FIRSTNAME: ${ADMIN_FIRSTNAME}
+      ADMIN_LASTNAME: ${ADMIN_LASTNAME}
 
       # File Storage
-      FILE_STORAGE_BASE_PATH: /app/uploads
-      FILE_STORAGE_MAX_FILE_SIZE: ${FILE_STORAGE_MAX_SIZE:-5242880}
+      FILE_STORAGE_BASE_PATH: ${FILE_STORAGE_BASE_PATH}
+      FILE_STORAGE_MAX_FILE_SIZE: ${FILE_STORAGE_MAX_FILE_SIZE}
+      FILE_STORAGE_ALLOWED_TYPES: ${FILE_STORAGE_ALLOWED_TYPES}
+      MULTIPART_MAX_FILE_SIZE: ${MULTIPART_MAX_FILE_SIZE}
+      MULTIPART_MAX_REQUEST_SIZE: ${MULTIPART_MAX_REQUEST_SIZE}
 
-      # Java Options
-      JAVA_OPTS: ${JAVA_OPTS:--Xms256m -Xmx512m}
+      # Logging
+      LOG_LEVEL_ROOT: ${LOG_LEVEL_ROOT}
+      LOG_LEVEL_APP: ${LOG_LEVEL_APP}
+      LOG_LEVEL_MONGO: ${LOG_LEVEL_MONGO}
+
+      # DevTools
+      DEVTOOLS_ENABLED: ${DEVTOOLS_ENABLED}
+
+      # Java
+      JAVA_OPTS: ${JAVA_OPTS}
 
     volumes:
       - api-uploads:/app/uploads
       - api-logs:/app/logs
+
     networks:
       - blogpress-network
-    # ❌ SUPPRIMÉ : depends_on car mongodb est dans un autre fichier
+
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8090/actuator/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 90s
 
 volumes:
   api-uploads:
@@ -65,4 +89,4 @@ volumes:
 networks:
   blogpress-network:
     name: blogpress-network
-    external: true  # ✅ CORRECT : utilise le réseau créé par setup-db
+    external: true
