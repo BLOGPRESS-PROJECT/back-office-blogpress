@@ -11,6 +11,7 @@ services:
       - "${MONGO_PORT:-27017}:27017"
     volumes:
       - mongodb-data:/data/db
+      - mongodb-logs:/var/log/mongodb
       - ./init-scripts:/docker-entrypoint-initdb.d:ro
     networks:
       - blogpress-network
@@ -20,11 +21,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
-    command: ["--auth"]
+    command: ["--auth", "--logpath", "/var/log/mongodb/mongod.log"]
 
 volumes:
   mongodb-data:
     name: blogpress-mongodb-data
+    driver: local
+  mongodb-logs:
+    name: blogpress-mongodb-logs
     driver: local
 
 networks:
