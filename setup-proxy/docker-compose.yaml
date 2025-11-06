@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   nginx:
     build:
@@ -26,6 +24,22 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: blogpress-certbot
+    volumes:
+      - certbot-certs:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+  api:
+    image: blogpress-api:latest
+    container_name: blogpress-api
+    networks:
+      - blogpress-network
+    # Ne pas exposer les ports (accès uniquement via Nginx)
 
 volumes:
   nginx-logs:
