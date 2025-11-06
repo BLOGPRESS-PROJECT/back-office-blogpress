@@ -1,44 +1,187 @@
-user nginx;
-worker_processes auto;
-error_log /var/log/nginx/error.log warn;
-pid /var/run/nginx.pid;
+# ==========================================
+# Backend API - Reverse Proxy
+# ==========================================
 
-events {
-    worker_connections 1024;
-    use epoll;
+# Upstream : définit les serveurs backend
+upstream api_backend {
+    # Serveur principal
+    server blogpress-api:8090 max_fails=3 fail_timeout=30s;
+
+    # Si tu as plusieurs instances (load balancing)
+    # server api2:8090 weight=1 max_fails=3 fail_timeout=30s;
+    # server api3:8090 weight=1 max_fails=3 fail_timeout=30s backup;
+
+    # Garder les connexions ouvertes
+    keepalive 32;
 }
 
-http {
-    include /etc/nginx/mime.types;
-    default_type application/octet-stream;
+# ==========================================
+# Redirection HTTP → HTTPS (à activer après SSL)
+# ==========================================
+# server {
+#     listen 80;
+#     server_name api.blogpress.com;
+#
+#     # Rediriger vers HTTPS
+#     return 301 https://$server_name$request_uri;
+# }
 
-    # Logs
-    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
-                    '$status $body_bytes_sent "$http_referer" '
-                    '"$http_user_agent" "$http_x_forwarded_for"';
+# ==========================================
+# API Backend - HTTP (avant SSL)
+# ==========================================
+server {
+    listen 80;
+    server_name api.blogpress.com localhost;
 
-    access_log /var/log/nginx/access.log main;
+    # Logs spécifiques à l'API
+    access_log /var/log/nginx/api_access.log main;
+    error_log /var/log/nginx/api_error.log warn;
 
-    # Performance
-    sendfile on;
-    tcp_nopush on;
-    tcp_nodelay on;
-    keepalive_timeout 65;
-    types_hash_max_size 2048;
+    # Taille max des uploads
     client_max_body_size 10M;
 
-    # Gzip compression
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1000;
-    gzip_types text/plain text/css text/xml text/javascript
-               application/json application/javascript application/xml+rss;
+    # ==========================================
+    # Routes de l'API
+    # ==========================================
+    location / {
+        # Rate limiting : 10 requêtes/seconde
+        limit_req zone=api_limit burst=20 nodelay;
 
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
+        # Proxy vers le backend
+        proxy_pass http://api_backend;
+        proxy_http_version 1.1;
 
-    # Inclure les configurations de sites
-    include /etc/nginx/conf.d/*.conf;
+        # Headers standards
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $server_name;
+
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+
+        # Buffers
+        proxy_buffering on;
+        proxy_buffer_size 4k;
+        proxy_buffers 8 4k;
+        proxy_busy_buffers_size 8k;
+
+        # Keep-alive avec le backend
+        proxy_set_header Connection "";
+
+        # WebSocket support (si nécessaire)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # ==========================================
+    # Routes spécifiques
+    # ==========================================
+
+    # Route de login avec rate limiting plus strict
+    location /api/auth/login {
+        limit_req zone=login_limit burst=5 nodelay;
+
+        proxy_pass http://api_backend;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Health check endpoint (pas de logs)
+    location /actuator/health {
+        access_log off;
+        proxy_pass http://api_backend;
+    }
+
+    # Servir les fichiers statiques (uploads)
+    location /uploads/ {
+        # Désactiver rate limiting pour les images
+        limit_req off;
+
+        # Headers de cache
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+
+        proxy_pass http://api_backend;
+    }
+
+    # ==========================================
+    # Certbot challenge (pour obtenir SSL)
+    # ==========================================
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    # ==========================================
+    # Bloquer les requêtes suspectes
+    # ==========================================
+
+    # Bloquer les bots malveillants
+    if ($http_user_agent ~* (bot|crawler|spider|scraper)) {
+        return 403;
+    }
+
+    # Bloquer les méthodes HTTP non autorisées
+    if ($request_method !~ ^(GET|POST|PUT|DELETE|PATCH|OPTIONS)$ ) {
+        return 405;
+    }
 }
+
+# ==========================================
+# API Backend - HTTPS (à activer après SSL)
+# ==========================================
+# server {
+#     listen 443 ssl http2;
+#     server_name api.blogpress.com;
+#
+#     # Certificats SSL
+#     ssl_certificate /etc/letsencrypt/live/api.blogpress.com/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/api.blogpress.com/privkey.pem;
+#
+#     # HSTS : forcer HTTPS pendant 1 an
+#     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+#
+#     # Logs
+#     access_log /var/log/nginx/api_access.log main;
+#     error_log /var/log/nginx/api_error.log warn;
+#
+#     client_max_body_size 10M;
+#
+#     # Routes (identiques à la config HTTP ci-dessus)
+#     location / {
+#         limit_req zone=api_limit burst=20 nodelay;
+#
+#         proxy_pass http://api_backend;
+#         proxy_http_version 1.1;
+#
+#         proxy_set_header Host $host;
+#         proxy_set_header X-Real-IP $remote_addr;
+#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#         proxy_set_header X-Forwarded-Proto $scheme;
+#         proxy_set_header X-Forwarded-Host $server_name;
+#     }
+#
+#     location /api/auth/login {
+#         limit_req zone=login_limit burst=5 nodelay;
+#         proxy_pass http://api_backend;
+#     }
+#
+#     location /actuator/health {
+#         access_log off;
+#         proxy_pass http://api_backend;
+#     }
+#
+#     location /uploads/ {
+#         limit_req off;
+#         expires 1y;
+#         add_header Cache-Control "public, immutable";
+#         proxy_pass http://api_backend;
+#     }
+# }

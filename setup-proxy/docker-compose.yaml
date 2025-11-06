@@ -1,55 +1,108 @@
 services:
+  # ==========================================
+  # NGINX REVERSE PROXY
+  # ==========================================
   nginx:
     build:
       context: .
       dockerfile: Dockerfile
-    image: blogpress-nginx:latest
+    image: blogpress-nginx:${NGINX_VERSION:-latest}
     container_name: blogpress-nginx
     restart: unless-stopped
+
+    # Ports exposés sur l'hôte
     ports:
-      - "${NGINX_HTTP_PORT:-80}:80"
-      - "${NGINX_HTTPS_PORT:-443}:443"
+      - "${NGINX_HTTP_PORT:-80}:80"      # HTTP
+      - "${NGINX_HTTPS_PORT:-443}:443"   # HTTPS
+
+    # Variables d'environnement
+    environment:
+      - API_DOMAIN=${API_DOMAIN:-api.blogpress.com}
+      - FRONTEND_DOMAIN=${FRONTEND_DOMAIN:-blogpress.com}
+
+    # Volumes
     volumes:
+      # Configurations (read-only)
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./conf.d:/etc/nginx/conf.d:ro
+
+      # Logs (lecture/écriture)
       - nginx-logs:/var/log/nginx
+
+      # Certificats SSL (read-only, gérés par Certbot)
       - certbot-certs:/etc/letsencrypt:ro
+
+      # Challenge Certbot (read-only)
       - certbot-www:/var/www/certbot:ro
+
+    # Réseau
     networks:
       - blogpress-network
-    depends_on:
-      - api
+
+    # Health check
     healthcheck:
       test: ["CMD", "nginx", "-t"]
       interval: 30s
       timeout: 10s
       retries: 3
-    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+      start_period: 10s
 
+    # Commande pour recharger Nginx toutes les 6h (pour renouvellement SSL)
+    command: >
+      /bin/sh -c "
+      while :; do 
+        sleep 6h & wait $${!}; 
+        nginx -s reload; 
+      done & 
+      nginx -g 'daemon off;'
+      "
+
+  # ==========================================
+  # CERTBOT (Gestion SSL automatique)
+  # ==========================================
   certbot:
     image: certbot/certbot:latest
     container_name: blogpress-certbot
+    restart: unless-stopped
+
+    # Volumes partagés avec Nginx
     volumes:
       - certbot-certs:/etc/letsencrypt
       - certbot-www:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
 
-  api:
-    image: blogpress-api:latest
-    container_name: blogpress-api
-    networks:
-      - blogpress-network
-    # Ne pas exposer les ports (accès uniquement via Nginx)
+    # Renouvellement automatique toutes les 12h
+    entrypoint: >
+      /bin/sh -c "
+      trap exit TERM; 
+      while :; do 
+        certbot renew --quiet; 
+        sleep 12h & wait $${!}; 
+      done
+      "
 
+# ==========================================
+# VOLUMES
+# ==========================================
 volumes:
+  # Logs Nginx
   nginx-logs:
     name: blogpress-nginx-logs
+    driver: local
+
+  # Certificats SSL Let's Encrypt
   certbot-certs:
     name: blogpress-certbot-certs
+    driver: local
+
+  # Fichiers de challenge Certbot
   certbot-www:
     name: blogpress-certbot-www
+    driver: local
 
+# ==========================================
+# RÉSEAUX
+# ==========================================
 networks:
   blogpress-network:
     name: blogpress-network
-    external: true
+    external: true  # Réseau créé par setup-db
