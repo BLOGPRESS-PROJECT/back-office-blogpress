@@ -20,6 +20,7 @@ data class User(
     val password: String,
     val firstName: String,
     val lastName: String,
+    val fullName : String = firstName+lastName,
 
     // ===== NOUVEAUX CHAMPS - INFORMATIONS PERSONNELLES =====
     val birthDate: LocalDate? = null,
@@ -48,6 +49,11 @@ data class User(
     // ===== RELATIONS =====
     val followers: Set<ObjectId> = emptySet(),
     val following: Set<ObjectId> = emptySet(),
+
+    // ===== PROFIL =====
+    val isPublic: Boolean = true, // Profil public ou privé
+    val showEmail: Boolean = false, // Afficher l'email publiquement
+    val showLocation: Boolean = true, // Afficher la localisation publiquement
 
     // ===== DATES =====
     @Indexed

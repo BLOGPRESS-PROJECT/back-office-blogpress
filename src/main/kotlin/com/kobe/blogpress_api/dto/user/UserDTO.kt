@@ -57,3 +57,19 @@ data class UserDTO(
 data class RefreshTokenRequestDTO(
     val refreshToken: String
 )
+
+data class PublicUserDTO(
+    val id: String,
+    val username: String,
+    val fullName: String,
+    val profilePicture: String?,
+    val bio: String?,
+    val isGoldenUser: Boolean,
+    val statistics: UserStatistics
+)
+
+data class PrivacyPreferencesDTO(
+    val isPublic: Boolean,
+    val showEmail: Boolean,
+    val showLocation: Boolean
+)

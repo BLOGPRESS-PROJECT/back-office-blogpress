@@ -1,6 +1,9 @@
 package com.kobe.blogpress_api.controller.user
 
+import com.kobe.blogpress_api.domain.model.user.UserStatistics
 import com.kobe.blogpress_api.dto.common.ApiResponseDto
+import com.kobe.blogpress_api.dto.user.PrivacyPreferencesDTO
+import com.kobe.blogpress_api.dto.user.PublicUserDTO
 import com.kobe.blogpress_api.dto.user.UpdateProfileRequestDTO
 import com.kobe.blogpress_api.dto.user.UserDTO
 import com.kobe.blogpress_api.services.fileStorage.FileStorageService
@@ -8,6 +11,8 @@ import com.kobe.blogpress_api.services.user.UserService
 import jakarta.validation.Valid
 import org.bson.types.ObjectId
 import org.slf4j.LoggerFactory
+import org.springframework.data.domain.Page
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.http.codec.multipart.FilePart
@@ -146,6 +151,22 @@ class UserController(
         )
     }
 
+    // Dans UserController.kt
+    @GetMapping("/me/following/{targetUserId}")
+    suspend fun isFollowing(
+        @AuthenticationPrincipal userId: String,
+        @PathVariable targetUserId: String
+    ): ResponseEntity<ApiResponseDto<Boolean>> {
+        val isFollowing = userService.isFollowing(ObjectId(userId), ObjectId(targetUserId))
+        return ResponseEntity.ok(
+            ApiResponseDto.success(
+                data = isFollowing,
+                message = "Follow status retrieved",
+                requestId = UUID.randomUUID().toString()
+            )
+        )
+    }
+
     @PostMapping("/follow/{targetUserId}")
     suspend fun followUser(
         @AuthenticationPrincipal userId: String,
@@ -232,4 +253,85 @@ class UserController(
         )
     }
 
+    @GetMapping("/search")
+    suspend fun searchUsers(
+        @RequestParam query: String,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int
+    ): ResponseEntity<ApiResponseDto<Page<UserDTO>>> {
+        val users = userService.searchUsers(query, page, size)
+        return ResponseEntity.ok(
+            ApiResponseDto.success(
+                data = users.map { userService.toDTO(it) },
+                message = "Users found",
+                requestId = UUID.randomUUID().toString()
+            )
+        )
+    }
+
+    @GetMapping("/{userId}/public")
+    suspend fun getPublicProfile(
+        @PathVariable userId: String
+    ): ResponseEntity<ApiResponseDto<PublicUserDTO>> {
+        val user = userService.findById(ObjectId(userId))
+        val publicProfile = PublicUserDTO(
+            id = user.id.toHexString(),
+            username = user.username,
+            fullName = "${user.firstName} ${user.lastName}",
+            profilePicture = user.profilePicture,
+            bio = user.bio,
+            isGoldenUser = user.isGoldenUser,
+            statistics = user.statistics
+        )
+        return ResponseEntity.ok(
+            ApiResponseDto.success(
+                data = publicProfile,
+                message = "Public profile retrieved",
+                requestId = UUID.randomUUID().toString()
+            )
+        )
+    }
+
+    @GetMapping("/me/statistics")
+    suspend fun getMyStatistics(
+        @AuthenticationPrincipal userId: String
+    ): ResponseEntity<ApiResponseDto<UserStatistics>> {
+        val user = userService.findById(ObjectId(userId))
+        return ResponseEntity.ok(
+            ApiResponseDto.success(
+                data = user.statistics,
+                message = "Statistics retrieved",
+                requestId = UUID.randomUUID().toString()
+            )
+        )
+    }
+
+    @PutMapping("/me/privacy")
+    suspend fun updatePrivacyPreferences(
+        @AuthenticationPrincipal userId: String,
+        @Valid @RequestBody preferences: PrivacyPreferencesDTO
+    ): ResponseEntity<ApiResponseDto<UserDTO>> {
+        val requestId = UUID.randomUUID().toString()
+
+        return try {
+            val user = userService.updatePrivacyPreferences(ObjectId(userId), preferences)
+            val userDTO = userService.toDTO(user)
+
+            ResponseEntity.ok(
+                ApiResponseDto.success(
+                    data = userDTO,
+                    message = "Privacy preferences updated successfully",
+                    requestId = requestId
+                )
+            )
+        } catch (e: Exception) {
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponseDto.error<UserDTO>(
+                    message = "Error updating privacy preferences: ${e.message}",
+                    errorCode = "UPDATE_PRIVACY_ERROR",
+                    errorDetails = mapOf("exception" to (e.message ?: "Unknown error")),
+                    requestId = requestId
+                ))
+        }
+    }
 }

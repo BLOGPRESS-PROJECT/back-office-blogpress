@@ -56,6 +56,13 @@ class SecurityConfig(
                     .pathMatchers(HttpMethod.GET, "/api/users/profile/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/users/username/**").permitAll()
 
+                    // Profile Picture ROUTES PUBLIQUES
+                    .pathMatchers(HttpMethod.GET, "/api/users/*/profile-picture").permitAll()
+                    .pathMatchers(HttpMethod.GET, "/api/users/profile-pictures/**").permitAll()
+                    .pathMatchers(HttpMethod.GET, "/api/users/*/profile-picture/metadata").permitAll()
+                    .pathMatchers(HttpMethod.GET, "/api/users/*/profile-picture/exists").permitAll()
+
+
                     // Recherche publique
                     .pathMatchers(HttpMethod.GET, "/api/search", "/api/search/**").permitAll()
 

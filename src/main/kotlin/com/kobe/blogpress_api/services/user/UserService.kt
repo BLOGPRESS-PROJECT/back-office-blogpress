@@ -2,6 +2,7 @@ package com.kobe.blogpress_api.services.user
 
 import com.kobe.blogpress_api.domain.model.user.Role
 import com.kobe.blogpress_api.domain.model.user.User
+import com.kobe.blogpress_api.dto.user.PrivacyPreferencesDTO
 import com.kobe.blogpress_api.dto.user.UpdateProfileRequestDTO
 import com.kobe.blogpress_api.dto.user.UserDTO
 import com.kobe.blogpress_api.exception.ResourceNotFoundException
@@ -9,6 +10,8 @@ import com.kobe.blogpress_api.repository.user.UserRepository
 import kotlinx.coroutines.reactor.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import org.bson.types.ObjectId
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.time.LocalDate
@@ -128,6 +131,12 @@ class UserService(
         return Pair(savedFollower, savedFollowing)
     }
 
+    // Dans UserService.kt
+    suspend fun isFollowing(followerId: ObjectId, followingId: ObjectId): Boolean {
+        val follower = findById(followerId)
+        return follower.following.contains(followingId)
+    }
+
     // Promouvoir un utilisateur en Golden User (ADMIN seulement)
     suspend fun promoteToGoldenUser(userId: ObjectId, adminId: ObjectId): User {
         // Vérifier que l'admin a le droit
@@ -179,6 +188,26 @@ class UserService(
         val user = findById(userId)
         return user.isGoldenUser
     }
+
+    suspend fun searchUsers(query: String, page: Int, size: Int): Page<User> {
+        val regex = Regex(query, RegexOption.IGNORE_CASE)
+        return userRepository.findByUsernameOrEmailOrFullName(regex, PageRequest.of(page, size))
+    }
+
+
+     suspend fun updatePrivacyPreferences(
+         userId: ObjectId,
+         preferences: PrivacyPreferencesDTO
+     ): User {
+         val user = findById(userId)
+         val updatedUser = user.copy(
+             isPublic = preferences.isPublic,
+             showEmail = preferences.showEmail,
+             showLocation = preferences.showLocation,
+             updatedAt = Instant.now()
+         )
+         return userRepository.save(updatedUser).awaitSingle()
+     }
 
     // Ajoute cette méthode
     fun toDTO(user: User): UserDTO {
