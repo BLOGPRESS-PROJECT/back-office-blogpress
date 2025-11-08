@@ -20,7 +20,7 @@ data class User(
     val password: String,
     val firstName: String,
     val lastName: String,
-    val fullName : String = firstName+lastName,
+    val fullName : String = firstName+" "+lastName,
 
     // ===== NOUVEAUX CHAMPS - INFORMATIONS PERSONNELLES =====
     val birthDate: LocalDate? = null,
