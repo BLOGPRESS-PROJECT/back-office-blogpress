@@ -1,6 +1,7 @@
 package com.kobe.blogpress_api.domain.interaction
 
 import org.bson.types.ObjectId
+import org.springframework.data.annotation.CreatedDate
 import org.springframework.data.annotation.Id
 import org.springframework.data.mongodb.core.index.CompoundIndex
 import org.springframework.data.mongodb.core.index.CompoundIndexes
@@ -13,13 +14,10 @@ import java.time.Instant
 )
 data class Favorite(
     @Id
-    val id: ObjectId = ObjectId(),
-
+    val id: ObjectId = ObjectId.get(),
     val contentId: ObjectId,
-
-    val contentType: ContentType,
-
     val userId: ObjectId,
-
+    val contentType: ContentType,
+    @CreatedDate
     val createdAt: Instant = Instant.now()
 )

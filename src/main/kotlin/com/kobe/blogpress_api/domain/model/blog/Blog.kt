@@ -1,7 +1,9 @@
 package com.kobe.blogpress_api.domain.model.blog
 
 import org.bson.types.ObjectId
+import org.springframework.data.annotation.CreatedDate
 import org.springframework.data.annotation.Id
+import org.springframework.data.annotation.LastModifiedDate
 import org.springframework.data.mongodb.core.index.CompoundIndex
 import org.springframework.data.mongodb.core.index.CompoundIndexes
 import org.springframework.data.mongodb.core.index.Indexed
@@ -33,7 +35,9 @@ data class Blog(
     val publishAt: Instant? = null,
 
     @Indexed
+    @CreatedDate
     val createdAt: Instant = Instant.now(),
+    @LastModifiedDate
     val updatedAt: Instant = Instant.now(),
 
     // Statistics
