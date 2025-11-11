@@ -1,4 +1,4 @@
-package com.kobe.blogpress_api.dto.user
+package com.kobe.blogpress_api.domain.dto.user
 
 data class SocialLinksDTO(
     val twitter: String? = null,

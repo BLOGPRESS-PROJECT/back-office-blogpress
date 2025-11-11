@@ -1,10 +1,10 @@
-package com.kobe.blogpress_api.dto.article
+package com.kobe.blogpress_api.domain.dto.article
 
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import java.time.Instant
 
-data class CreateArticleRequest(
+data class CreateBlogPostRequest(
     @field:NotBlank(message = "Le titre est obligatoire")
     @field:Size(min = 3, max = 200, message = "Le titre doit contenir entre 3 et 200 caractères")
     val title: String,

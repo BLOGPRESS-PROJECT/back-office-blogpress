@@ -1,4 +1,4 @@
-package com.kobe.blogpress_api.dto.common
+package com.kobe.blogpress_api.domain.dto.common
 
 import java.time.Instant
 

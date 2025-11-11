@@ -1,11 +1,13 @@
-package com.kobe.blogpress_api.dto.blog
+package com.kobe.blogpress_api.domain.dto.blog
 
+import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import java.time.Instant
 
-data class UpdateBlogRequest(
+data class CreateBlogRequest(
+    @field:NotBlank(message = "Le titre du blog est obligatoire")
     @field:Size(min = 3, max = 100, message = "Le titre doit contenir entre 3 et 100 caractères")
-    val title: String? = null,
+    val title: String,
 
     @field:Size(max = 500, message = "La description ne peut pas dépasser 500 caractères")
     val description: String? = null,
@@ -17,9 +19,9 @@ data class UpdateBlogRequest(
 
     val coverImageUrl: String? = null,
 
-    val isPublished: Boolean? = null,
+    val isPublished: Boolean = false,
 
-    val isPrivate: Boolean? = null,
+    val isPrivate: Boolean = false,
 
     val publishAt: Instant? = null
 )

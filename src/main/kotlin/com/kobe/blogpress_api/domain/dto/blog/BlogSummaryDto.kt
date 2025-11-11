@@ -1,4 +1,4 @@
-package com.kobe.blogpress_api.dto.blog
+package com.kobe.blogpress_api.domain.dto.blog
 
 import jakarta.validation.constraints.Size
 import java.time.Instant

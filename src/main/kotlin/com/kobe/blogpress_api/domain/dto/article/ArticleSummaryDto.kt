@@ -1,12 +1,12 @@
-package com.kobe.blogpress_api.dto.article
+package com.kobe.blogpress_api.domain.dto.article
+
 
 import com.kobe.blogpress_api.domain.model.article.ArticleType
 import java.time.Instant
 
-data class ArticleResponse(
+data class ArticleSummaryDto(
     val id: String,
     val title: String,
-    val content: String,
     val excerpt: String?,
     val slug: String,
     val coverImageUrl: String?,
@@ -17,13 +17,16 @@ data class ArticleResponse(
     val type: ArticleType,
     val isPublished: Boolean,
     val isPrivate: Boolean,
-    val publishAt: Instant?,
     val publicUrl: String,
     val createdAt: Instant,
     val updatedAt: Instant,
+    val readTime: Int,
+    val stats: ArticleStats
+)
+
+data class ArticleStats(
     val viewCount: Long,
     val likeCount: Long,
     val commentCount: Long,
-    val shareCount: Long,
-    val readTime: Int
+    val shareCount: Long
 )
