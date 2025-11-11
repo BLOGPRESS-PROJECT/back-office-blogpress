@@ -10,11 +10,11 @@ data class BlogSummaryDto(
     val slug: String,
     val logoImageUrl: String?,
     val coverImageUrl: String?,
-    val tags: List<String>?,
+    val tags: List<String>,
     val authorId: String,
     val isPublished: Boolean,
     val isPrivate: Boolean,
-    val publicUrl: String,
+    val publicUrl: String?,
     val createdAt: Instant,
     val updatedAt: Instant,
     val postCount: Long,
@@ -26,4 +26,12 @@ data class BlogStats(
     val likeCount: Long,
     val shareCount: Long,
     val favoriteCount: Long
+)
+
+data class BlogGlobalStatsResponse(
+    val totalBlogs: Long,
+    val totalViews: Long,
+    val totalLikes: Long,
+    val totalShares: Long,
+    val totalFavorites: Long
 )
