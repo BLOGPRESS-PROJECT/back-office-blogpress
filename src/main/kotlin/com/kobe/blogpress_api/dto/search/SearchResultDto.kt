@@ -1,4 +1,4 @@
-package com.kobe.blogpress_api.domain.dto.search
+package com.kobe.blogpress_api.dto.search
 
 import com.kobe.blogpress_api.domain.model.article.ArticleType
 import java.time.Instant

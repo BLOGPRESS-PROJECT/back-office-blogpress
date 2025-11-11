@@ -1,4 +1,4 @@
-package com.kobe.blogpress_api.domain.dto.user
+package com.kobe.blogpress_api.dto.user
 
 import com.kobe.blogpress_api.domain.model.user.Gender
 import com.kobe.blogpress_api.domain.model.user.Role
