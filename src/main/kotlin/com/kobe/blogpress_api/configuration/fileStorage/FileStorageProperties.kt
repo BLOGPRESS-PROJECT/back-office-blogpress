@@ -15,7 +15,7 @@ import jakarta.annotation.PostConstruct
 @ConfigurationProperties(prefix = "file.storage")
 data class FileStorageProperties(
     var basePath: String = "./uploads",
-    var maxFileSize: Long = 5242880, // 5MB en bytes
+    var maxFileSize: Long = 5 * 1024 * 1024, // 5MB en bytes
     var allowedTypes: List<String> = listOf("image/jpeg", "image/png", "image/gif", "image/webp"),
     var profilePicturesPath: String = "profile-pictures",
     var blogCoversPath: String = "blog-covers",
@@ -25,13 +25,9 @@ data class FileStorageProperties(
 
     // Chemins absolus
     fun getBasePath(): Path = Paths.get(basePath).toAbsolutePath().normalize()
-
     fun getProfilePicturesPath(): Path = getBasePath().resolve(profilePicturesPath)
-
     fun getBlogCoversPath(): Path = getBasePath().resolve(blogCoversPath)
-
     fun getBlogLogosPath(): Path = getBasePath().resolve(blogLogosPath)
-
     fun getArticleCoversPath(): Path = getBasePath().resolve(articleCoversPath)
 
     @PostConstruct

@@ -21,7 +21,7 @@ class ContentInteractionController(
 
     private val logger = LoggerFactory.getLogger(ContentInteractionController::class.java)
 
-    @PostMapping("/{contentId}/like")
+    @PostMapping("/{contentId}/like/toggle")
     suspend fun toggleLike(
         @AuthenticationPrincipal userId: String,
         @PathVariable contentId: String,
@@ -45,7 +45,7 @@ class ContentInteractionController(
         )
     }
 
-    @PostMapping("/{contentId}/favorite")
+    @PostMapping("/favorite/toggle")
     suspend fun toggleFavorite(
         @AuthenticationPrincipal userId: String,
         @PathVariable contentId: String,
@@ -69,7 +69,7 @@ class ContentInteractionController(
         )
     }
 
-    @PostMapping("/{contentId}/view")
+    @PostMapping("/view")
     suspend fun incrementView(
         @PathVariable contentId: String,
         @RequestBody request: ContentTypeRequest
@@ -88,7 +88,7 @@ class ContentInteractionController(
         ) as ResponseEntity<ApiResponseDto<Nothing>>
     }
 
-    @PostMapping("/{contentId}/share")
+    @PostMapping("/share")
     suspend fun incrementShare(
         @PathVariable contentId: String,
         @RequestBody request: ContentTypeRequest

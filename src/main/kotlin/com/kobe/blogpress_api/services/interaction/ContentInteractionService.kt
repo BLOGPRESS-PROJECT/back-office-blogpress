@@ -161,3 +161,16 @@ data class ShareResponse(
     val shareCount: Long,
     val shareUrl: String? = null
 )
+
+interface ArticleService {
+    suspend fun incrementViewCount(articleId: ObjectId)
+    suspend fun incrementLikeCount(articleId: ObjectId)
+    suspend fun decrementLikeCount(articleId: ObjectId)
+    suspend fun incrementShareCount(articleId: ObjectId)
+    suspend fun getArticleShareInfo(articleId: ObjectId): ArticleShareInfo
+}
+
+data class ArticleShareInfo(
+    val shareCount: Long,
+    val publicUrl: String?
+)

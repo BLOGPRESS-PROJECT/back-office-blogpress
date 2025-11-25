@@ -10,31 +10,28 @@ import java.text.Normalizer
 class BlogSlugService(
     private val blogRepository: BlogRepository
 ) {
-
     suspend fun generateUniqueSlug(title: String, blogId: ObjectId? = null): String {
-        val baseSlug = generateSlug(title)
-        return ensureUniqueSlug(baseSlug, blogId)
+        val base = generateSlug(title)
+        return ensureUniqueSlug(base, blogId)
     }
 
-    private fun generateSlug(title: String): String {
-        return Normalizer.normalize(title, Normalizer.Form.NFD)
-            .replace("\\p{M}".toRegex(), "") // Supprime les accents
+    private fun generateSlug(input: String): String {
+        return Normalizer.normalize(input, Normalizer.Form.NFD)
+            .replace("\\p{M}".toRegex(), "")
             .lowercase()
-            .replace("[^a-z0-9\\s-]".toRegex(), "") // Supprime caractères spéciaux
-            .replace("\\s+".toRegex(), "-") // Remplace espaces par tirets
-            .replace("-+".toRegex(), "-") // Supprime tirets multiples
-            .trim('-') // Supprime tirets en début/fin
+            .replace("[^a-z0-9\\s-]".toRegex(), "")
+            .replace("\\s+".toRegex(), "-")
+            .replace("-+".toRegex(), "-")
+            .trim('-')
     }
 
     private suspend fun ensureUniqueSlug(slug: String, blogId: ObjectId? = null): String {
         var finalSlug = slug
         var counter = 1
-
         while (isSlugTaken(finalSlug, blogId)) {
             finalSlug = "$slug-$counter"
             counter++
         }
-
         return finalSlug
     }
 
