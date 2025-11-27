@@ -14,14 +14,14 @@ import org.springframework.web.bind.annotation.*
 import java.util.*
 
 @RestController
-@RequestMapping("/api/content")
+@RequestMapping("/api/interactions")
 class ContentInteractionController(
     private val contentInteractionService: ContentInteractionService
 ) {
 
     private val logger = LoggerFactory.getLogger(ContentInteractionController::class.java)
 
-    @PostMapping("/{contentId}/like/toggle")
+    @PostMapping("/like/toggle")
     suspend fun toggleLike(
         @AuthenticationPrincipal userId: String,
         @PathVariable contentId: String,
