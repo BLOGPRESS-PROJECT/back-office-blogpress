@@ -1,4 +1,4 @@
-package com.kobe.blogpress_api.controller.blog
+package com.kobe.blogpress_api.controller.images
 
 import com.kobe.blogpress_api.dto.blog.UpdateBlogRequest
 import com.kobe.blogpress_api.dto.common.ApiResponseDto
@@ -10,8 +10,13 @@ import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.http.codec.multipart.FilePart
 import org.springframework.security.core.annotation.AuthenticationPrincipal
-import org.springframework.web.bind.annotation.*
-import java.util.*
+import org.springframework.web.bind.annotation.DeleteMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestPart
+import org.springframework.web.bind.annotation.RestController
+import java.util.UUID
 
 @RestController
 @RequestMapping("/api/blogs")
@@ -44,7 +49,7 @@ class BlogImageController(
         blogService.updateBlog(ObjectId(blogId), UpdateBlogRequest(coverImageUrl = imageUrl), ObjectId(userId))
 
         return ResponseEntity.ok(
-            ApiResponseDto.success(
+            ApiResponseDto.Companion.success(
                 data = mapOf("coverImageUrl" to imageUrl, "blogId" to blogId),
                 message = "Blog cover image uploaded successfully",
                 requestId = requestId
@@ -74,7 +79,7 @@ class BlogImageController(
         blogService.updateBlog(ObjectId(blogId), UpdateBlogRequest(logoImageUrl = imageUrl), ObjectId(userId))
 
         return ResponseEntity.ok(
-            ApiResponseDto.success(
+            ApiResponseDto.Companion.success(
                 data = mapOf("logoImageUrl" to imageUrl, "blogId" to blogId),
                 message = "Blog logo image uploaded successfully",
                 requestId = requestId
@@ -102,7 +107,7 @@ class BlogImageController(
         blogService.updateBlog(ObjectId(blogId), UpdateBlogRequest(coverImageUrl = ""), ObjectId(userId))
 
         return ResponseEntity.ok(
-            ApiResponseDto.success(
+            ApiResponseDto.Companion.success(
                 data = null,
                 message = "Blog cover image deleted successfully",
                 requestId = requestId
@@ -130,7 +135,7 @@ class BlogImageController(
         blogService.updateBlog(ObjectId(blogId), UpdateBlogRequest(logoImageUrl = ""), ObjectId(userId))
 
         return ResponseEntity.ok(
-            ApiResponseDto.success(
+            ApiResponseDto.Companion.success(
                 data = null,
                 message = "Blog logo image deleted successfully",
                 requestId = requestId
