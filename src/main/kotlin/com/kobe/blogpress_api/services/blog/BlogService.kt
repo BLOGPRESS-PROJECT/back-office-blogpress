@@ -11,6 +11,7 @@ import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.data.mongodb.core.query.Update
 import com.kobe.blogpress_api.repository.blog.BlogRepository
+import com.kobe.blogpress_api.services.fileStorage.FileStorageService
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -20,6 +21,7 @@ import kotlinx.coroutines.reactor.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import reactor.core.publisher.Flux
 import org.bson.types.ObjectId
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
@@ -32,9 +34,12 @@ class BlogService(
     private val blogRepository: BlogRepository,
     private val blogSlugService: BlogSlugService,
     private val mongoTemplate: ReactiveMongoTemplate,
+    private val fileStorageService: FileStorageService,
     @Value("\${app.base-url:http://localhost:8090}") private val baseUrl: String,
     @Value("\${app.frontend-url:http://localhost:3000}") private val frontendUrl: String
 ) {
+
+    private val logger = LoggerFactory.getLogger(BlogService::class.java)
 
     suspend fun createBlog(request: CreateBlogRequest, authorId: ObjectId): BlogResponse {
         val slug = blogSlugService.generateUniqueSlug(request.title)
@@ -146,7 +151,28 @@ class BlogService(
         if (blog.authorId != authorId) {
             error("You are not authorized to delete this blog")
         }
+        
+        // Supprimer les images associées au blog
+        try {
+            // Supprimer l'image de couverture si elle existe et est un fichier local
+            if (!blog.coverImageUrl.isNullOrBlank() && fileStorageService.isLocalFile(blog.coverImageUrl)) {
+                fileStorageService.deleteBlogCoverImage(blog.coverImageUrl)
+                logger.info("Cover image deleted for blog: ${blogId.toHexString()}")
+            }
+            
+            // Supprimer l'image logo si elle existe et est un fichier local
+            if (!blog.logoImageUrl.isNullOrBlank() && fileStorageService.isLocalFile(blog.logoImageUrl)) {
+                fileStorageService.deleteBlogLogoImage(blog.logoImageUrl)
+                logger.info("Logo image deleted for blog: ${blogId.toHexString()}")
+            }
+        } catch (e: Exception) {
+            logger.warn("Error deleting images for blog ${blogId.toHexString()}: ${e.message}", e)
+            // Continuer la suppression du blog même si la suppression des images échoue
+        }
+        
+        // Supprimer le blog de la base de données
         blogRepository.delete(blog).awaitSingleOrNull()
+        logger.info("Blog deleted successfully: ${blogId.toHexString()}")
     }
 
     suspend fun getBlogBySlug(slug: String, userId: ObjectId? = null): BlogResponse {
