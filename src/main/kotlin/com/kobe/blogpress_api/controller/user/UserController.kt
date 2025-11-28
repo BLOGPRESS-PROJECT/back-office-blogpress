@@ -6,6 +6,7 @@ import com.kobe.blogpress_api.dto.user.PrivacyPreferencesDTO
 import com.kobe.blogpress_api.dto.user.PublicUserDTO
 import com.kobe.blogpress_api.dto.user.UpdateProfileRequestDTO
 import com.kobe.blogpress_api.dto.user.UserDTO
+import com.kobe.blogpress_api.exception.ResourceNotFoundException
 import com.kobe.blogpress_api.services.fileStorage.FileStorageService
 import com.kobe.blogpress_api.services.user.UserService
 import jakarta.validation.Valid
@@ -59,6 +60,58 @@ class UserController(
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponseDto.error(
                     message = "Erreur lors de la récupération de l'utilisateur: ${e.message}",
+                    requestId = requestId
+                ))
+        }
+    }
+
+    @GetMapping("/{userId}")
+    suspend fun getUserById(
+        @PathVariable userId: String
+    ): ResponseEntity<ApiResponseDto<PublicUserDTO>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] Get user by ID: $userId")
+
+        try {
+            if (!ObjectId.isValid(userId)) {
+                logger.warn("[$requestId] Invalid user ID format: $userId")
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponseDto.error(
+                        message = "Format d'ID utilisateur invalide",
+                        requestId = requestId
+                    ))
+            }
+
+            val user = userService.findById(ObjectId(userId))
+            val publicProfile = PublicUserDTO(
+                id = user.id.toHexString(),
+                username = user.username,
+                fullName = "${user.firstName} ${user.lastName}",
+                profilePicture = user.profilePicture,
+                bio = user.bio,
+                isGoldenUser = user.isGoldenUser,
+                statistics = user.statistics
+            )
+
+            return ResponseEntity.ok(
+                ApiResponseDto.success(
+                    data = publicProfile,
+                    message = "Profil utilisateur récupéré avec succès",
+                    requestId = requestId
+                )
+            )
+        } catch (e: ResourceNotFoundException) {
+            logger.warn("[$requestId] User not found: $userId")
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponseDto.error(
+                    message = "Utilisateur non trouvé",
+                    requestId = requestId
+                ))
+        } catch (e: Exception) {
+            logger.error("[$requestId] Error retrieving user: $userId", e)
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponseDto.error(
+                    message = "Erreur lors de la récupération de l'utilisateur",
                     requestId = requestId
                 ))
         }

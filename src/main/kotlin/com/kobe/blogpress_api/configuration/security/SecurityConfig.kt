@@ -60,8 +60,11 @@ class SecurityConfig(
                     .pathMatchers(HttpMethod.GET, "/api/blogs", "/api/blogs/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/articles", "/api/articles/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/posts", "/api/posts/**").permitAll()
+                    // Profils utilisateurs publics
                     .pathMatchers(HttpMethod.GET, "/api/users/profile/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/users/username/**").permitAll()
+                    .pathMatchers(HttpMethod.GET, "/api/users/*/public").permitAll()
+                    .pathMatchers(HttpMethod.GET, "/api/users/{userId}").permitAll() // ⭐ NOUVEAU : Profil public par ID
 
                     // Profile Picture ROUTES PUBLIQUES
                     .pathMatchers(HttpMethod.GET, "/api/users/*/profile-picture").permitAll()
