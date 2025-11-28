@@ -25,6 +25,10 @@ data class Blog(
 
     @Indexed(unique = true)
     val slug: String,
+    
+    @Indexed(unique = true)
+    val shareId: String, // Identifiant unique pour le partage (UUID)
+    
     val logoImageUrl: String? = null,
     val coverImageUrl: String? = null,
 

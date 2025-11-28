@@ -13,6 +13,8 @@ import java.time.Instant
 interface BlogRepository : ReactiveMongoRepository<Blog, ObjectId> {
 
     fun findBySlug(slug: String): Mono<Blog>
+    
+    fun findByShareId(shareId: String): Mono<Blog>
 
     fun existsBySlug(slug: String): Mono<Boolean>
 

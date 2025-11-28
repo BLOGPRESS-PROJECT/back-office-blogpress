@@ -65,34 +65,96 @@ class BlogController(
     @GetMapping("/slug/{slug}")
     suspend fun getBlogBySlug(
         @PathVariable slug: String,
+        @AuthenticationPrincipal userId: String? = null
+    ): ResponseEntity<ApiResponseDto<BlogResponse>> {
+        val requestId = UUID.randomUUID().toString()
+        // Convertir les chaînes vides en null
+        val normalizedUserId = userId?.takeIf { it.isNotBlank() }
+        logger.info("[$requestId] Get blog by slug: $slug, userId: $normalizedUserId")
+        try {
+            val userObjectId = normalizedUserId?.let { ObjectId(it) }
+            val blog = blogService.getBlogBySlug(slug, userObjectId)
+            return ResponseEntity.ok(ApiResponseDto.success(data = blog, message = "Blog retrieved successfully", requestId = requestId))
+        } catch (e: Exception) {
+            logger.error("[$requestId] Error retrieving blog by slug: $slug", e)
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponseDto.error(
+                    message = "Erreur lors de la récupération du blog: ${e.message}",
+                    requestId = requestId
+                ))
+        }
+    }
+
+    @GetMapping("/share/{shareId}")
+    suspend fun getBlogByShareId(
+        @PathVariable shareId: String,
         @AuthenticationPrincipal userId: String?
     ): ResponseEntity<ApiResponseDto<BlogResponse>> {
         val requestId = UUID.randomUUID().toString()
-        logger.info("[$requestId] Get blog by slug: $slug")
-        val userObjectId = userId?.let { ObjectId(it) }
-        val blog = blogService.getBlogBySlug(slug, userObjectId)
-        return ResponseEntity.ok(ApiResponseDto.success(data = blog, message = "Blog retrieved successfully", requestId = requestId))
+        // Convertir les chaînes vides en null
+        val normalizedUserId = userId?.takeIf { it.isNotBlank() }
+        logger.info("[$requestId] Get blog by shareId: $shareId, userId: $normalizedUserId")
+        try {
+            val userObjectId = normalizedUserId?.let { ObjectId(it) }
+            val blog = blogService.getBlogByShareId(shareId, userObjectId)
+            return ResponseEntity.ok(ApiResponseDto.success(data = blog, message = "Blog retrieved successfully", requestId = requestId))
+        } catch (e: Exception) {
+            logger.error("[$requestId] Error retrieving blog by shareId: $shareId", e)
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponseDto.error(
+                    message = "Erreur lors de la récupération du blog: ${e.message}",
+                    requestId = requestId
+                ))
+        }
     }
 
     @GetMapping("/{identifier}")
     suspend fun getBlogByIdOrSlug(
         @PathVariable identifier: String,
-        @AuthenticationPrincipal userId: String?
+        @AuthenticationPrincipal userId: String? = null
     ): ResponseEntity<ApiResponseDto<BlogResponse>> {
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] Get blog by identifier: $identifier")
         
-        // Détecter si c'est un ObjectId ou un slug
-        val blog = if (ObjectId.isValid(identifier)) {
-            // C'est un ObjectId
-            blogService.getBlogById(ObjectId(identifier))
-        } else {
-            // C'est probablement un slug
-            val userObjectId = userId?.let { ObjectId(it) }
-            blogService.getBlogBySlug(identifier, userObjectId)
+        try {
+            // Convertir les chaînes vides en null
+            val normalizedUserId = userId?.takeIf { it.isNotBlank() }
+            val userObjectId = normalizedUserId?.let { ObjectId(it) }
+            
+            // Détecter si c'est un ObjectId, un shareId (UUID), ou un slug
+            val blog = when {
+                ObjectId.isValid(identifier) -> {
+                    // C'est un ObjectId
+                    blogService.getBlogById(ObjectId(identifier))
+                }
+                isValidUUID(identifier) -> {
+                    // C'est probablement un shareId (UUID)
+                    blogService.getBlogByShareId(identifier, userObjectId)
+                }
+                else -> {
+                    // C'est probablement un slug
+                    blogService.getBlogBySlug(identifier, userObjectId)
+                }
+            }
+            
+            return ResponseEntity.ok(ApiResponseDto.success(data = blog, message = "Blog retrieved successfully", requestId = requestId))
+        } catch (e: Exception) {
+            logger.error("[$requestId] Error retrieving blog by identifier: $identifier", e)
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponseDto.error(
+                    message = "Erreur lors de la récupération du blog: ${e.message}",
+                    requestId = requestId
+                ))
         }
-        
-        return ResponseEntity.ok(ApiResponseDto.success(data = blog, message = "Blog retrieved successfully", requestId = requestId))
+    }
+    
+    private fun isValidUUID(uuid: String): Boolean {
+        return try {
+            java.util.UUID.fromString(uuid)
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     @GetMapping("/user")

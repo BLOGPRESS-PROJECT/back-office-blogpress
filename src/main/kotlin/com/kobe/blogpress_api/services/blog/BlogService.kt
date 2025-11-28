@@ -43,6 +43,7 @@ class BlogService(
 
     suspend fun createBlog(request: CreateBlogRequest, authorId: ObjectId): BlogResponse {
         val slug = blogSlugService.generateUniqueSlug(request.title)
+        val shareId = java.util.UUID.randomUUID().toString() // Identifiant unique pour le partage
         
         // Si publishAt est défini et dans le futur, le blog ne doit pas être publié immédiatement
         val now = Instant.now()
@@ -55,13 +56,14 @@ class BlogService(
             else -> request.isPublished
         }
         
-        // Générer l'URL publique
-        val publicUrl = "$frontendUrl/blog/$slug"
+        // Générer l'URL publique (utiliser shareId pour garantir l'unicité)
+        val publicUrl = "$frontendUrl/blog/$shareId"
         
         val blog = Blog(
             title = request.title,
             description = request.description,
             slug = slug,
+            shareId = shareId,
             logoImageUrl = request.logoImageUrl,
             coverImageUrl = request.coverImageUrl,
             authorId = authorId,
@@ -86,10 +88,9 @@ class BlogService(
             blogSlugService.generateUniqueSlug(request.title, blogId)
         } else existing.slug
         
-        // Recalculer l'URL publique si le slug a changé
-        val newPublicUrl = if (newSlug != existing.slug) {
-            "$frontendUrl/blog/$newSlug"
-        } else existing.publicUrl
+        // Recalculer l'URL publique avec le shareId (qui reste inchangé)
+        // Le shareId ne change jamais, donc l'URL publique reste la même
+        val newPublicUrl = existing.publicUrl // Garder l'URL avec le shareId original
         
         // Normaliser les URLs d'images : convertir les chaînes vides en null
         val normalizedLogoImageUrl = request.logoImageUrl?.takeIf { it.isNotBlank() }
@@ -178,6 +179,21 @@ class BlogService(
     suspend fun getBlogBySlug(slug: String, userId: ObjectId? = null): BlogResponse {
         val blog = blogRepository.findBySlug(slug).awaitSingleOrNull()
             ?: error("Blog not found with slug: $slug")
+        if (blog.isPrivate && blog.authorId != userId) {
+            error("This blog is private")
+        }
+        if (!blog.isPublished && blog.authorId != userId) {
+            error("This blog is not published yet")
+        }
+        if (blog.publishAt != null && blog.publishAt.isAfter(Instant.now()) && blog.authorId != userId) {
+            error("Content not yet published")
+        }
+        return toBlogResponse(blog)
+    }
+    
+    suspend fun getBlogByShareId(shareId: String, userId: ObjectId? = null): BlogResponse {
+        val blog = blogRepository.findByShareId(shareId).awaitSingleOrNull()
+            ?: error("Blog not found with shareId: $shareId")
         if (blog.isPrivate && blog.authorId != userId) {
             error("This blog is private")
         }
@@ -285,12 +301,14 @@ class BlogService(
         
         val newTitle = "${original.title} (copy)"
         val newSlug = blogSlugService.generateUniqueSlug(newTitle)
-        val newPublicUrl = "$frontendUrl/blog/$newSlug"
+        val newShareId = java.util.UUID.randomUUID().toString() // Nouveau shareId unique
+        val newPublicUrl = "$frontendUrl/blog/$newShareId"
         
         val duplicated = Blog(
             title = newTitle,
             description = original.description,
             slug = newSlug,
+            shareId = newShareId,
             logoImageUrl = original.logoImageUrl,
             coverImageUrl = original.coverImageUrl,
             tags = original.tags,
@@ -415,6 +433,7 @@ class BlogService(
             title = blog.title,
             description = blog.description,
             slug = blog.slug,
+            shareId = blog.shareId,
             logoImageUrl = blog.logoImageUrl,
             coverImageUrl = blog.coverImageUrl,
             tags = blog.tags,
@@ -440,6 +459,7 @@ class BlogService(
             title = blog.title,
             description = blog.description,
             slug = blog.slug,
+            shareId = blog.shareId,
             // ⚠️ IMPORTANT : Retourner les URLs API au lieu des chemins directs
             logoImageUrl = normalizeImageUrl(blog.logoImageUrl)?.let { url ->
                 if (url.startsWith("/uploads/")) {

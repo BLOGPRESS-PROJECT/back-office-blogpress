@@ -7,6 +7,7 @@ data class BlogResponse(
     val title: String,
     val description: String?,
     val slug: String,
+    val shareId: String, // Identifiant unique pour le partage (UUID)
     val logoImageUrl: String?,
     val coverImageUrl: String?,
     val tags: List<String>,

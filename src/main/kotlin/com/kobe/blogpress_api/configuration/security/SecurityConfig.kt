@@ -54,8 +54,9 @@ class SecurityConfig(
                     .pathMatchers("/api/auth/register", "/api/auth/login", "/api/auth/refresh").permitAll()
 
                     // Lecture publique des blogs et articles
-                    // Routes spécifiques pour les slugs (doivent être avant les routes générales)
+                    // Routes spécifiques pour les slugs et shareId (doivent être avant les routes générales)
                     .pathMatchers(HttpMethod.GET, "/api/blogs/slug/**").permitAll()
+                    .pathMatchers(HttpMethod.GET, "/api/blogs/share/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/blogs", "/api/blogs/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/articles", "/api/articles/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/posts", "/api/posts/**").permitAll()
