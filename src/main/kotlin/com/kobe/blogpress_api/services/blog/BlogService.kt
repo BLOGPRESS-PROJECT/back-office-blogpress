@@ -12,10 +12,13 @@ import org.springframework.data.mongodb.core.query.Query
 import org.springframework.data.mongodb.core.query.Update
 import com.kobe.blogpress_api.repository.blog.BlogRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactor.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
+import reactor.core.publisher.Flux
 import org.bson.types.ObjectId
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.PageRequest
@@ -144,8 +147,156 @@ class BlogService(
         return toBlogResponse(blog)
     }
 
-    suspend fun getUserBlogs(authorId: ObjectId): Flow<BlogSummaryDto> {
-        return blogRepository.findByAuthorId(authorId).asFlow().map { toBlogSummaryDto(it) }
+    suspend fun getUserBlogs(
+        authorId: ObjectId,
+        search: String? = null,
+        status: String? = null,
+        sortBy: String? = null,
+        order: String? = "desc"
+    ): List<BlogSummaryDto> {
+        // Récupérer tous les blogs de l'utilisateur
+        val allBlogs = blogRepository.findByAuthorId(authorId).collectList().awaitSingle()
+        
+        // Convertir en DTOs
+        var blogs = allBlogs.map { toBlogSummaryDto(it) }
+        
+        // Filtrage par statut
+        if (status != null && status != "all") {
+            blogs = blogs.filter { blog ->
+                when (status) {
+                    "published" -> blog.isPublished && !blog.isPrivate
+                    "draft" -> !blog.isPublished
+                    "private" -> blog.isPrivate
+                    else -> true
+                }
+            }
+        }
+        
+        // Recherche dans titre/description
+        if (!search.isNullOrBlank()) {
+            val searchLower = search.lowercase()
+            blogs = blogs.filter { blog ->
+                blog.title.lowercase().contains(searchLower) ||
+                (blog.description?.lowercase()?.contains(searchLower) == true)
+            }
+        }
+        
+        // Tri
+        val sortedBlogs = when (sortBy) {
+            "title" -> blogs.sortedBy { it.title.lowercase() }
+            "updatedAt" -> blogs.sortedBy { it.updatedAt }
+            "viewCount" -> blogs.sortedBy { it.stats.viewCount }
+            "likeCount" -> blogs.sortedBy { it.stats.likeCount }
+            "createdAt", null -> blogs.sortedBy { it.createdAt }
+            else -> blogs
+        }
+        
+        return if (order == "asc") {
+            sortedBlogs
+        } else {
+            sortedBlogs.reversed()
+        }
+    }
+    
+    suspend fun publishBlog(blogId: ObjectId, authorId: ObjectId): BlogResponse {
+        val blog = findById(blogId)
+        if (blog.authorId != authorId) {
+            error("You are not authorized to publish this blog")
+        }
+        
+        val now = Instant.now()
+        val updated = blog.copy(
+            isPublished = true,
+            publishAt = if (blog.publishAt == null || blog.publishAt.isAfter(now)) now else blog.publishAt,
+            updatedAt = now
+        )
+        val saved = blogRepository.save(updated).awaitSingle()
+        return toBlogResponse(saved)
+    }
+    
+    suspend fun unpublishBlog(blogId: ObjectId, authorId: ObjectId): BlogResponse {
+        val blog = findById(blogId)
+        if (blog.authorId != authorId) {
+            error("You are not authorized to unpublish this blog")
+        }
+        
+        val updated = blog.copy(
+            isPublished = false,
+            updatedAt = Instant.now()
+        )
+        val saved = blogRepository.save(updated).awaitSingle()
+        return toBlogResponse(saved)
+    }
+    
+    suspend fun duplicateBlog(blogId: ObjectId, authorId: ObjectId): BlogResponse {
+        val original = findById(blogId)
+        if (original.authorId != authorId) {
+            error("You are not authorized to duplicate this blog")
+        }
+        
+        val newTitle = "${original.title} (copy)"
+        val newSlug = blogSlugService.generateUniqueSlug(newTitle)
+        
+        val duplicated = Blog(
+            title = newTitle,
+            description = original.description,
+            slug = newSlug,
+            logoImageUrl = original.logoImageUrl,
+            coverImageUrl = original.coverImageUrl,
+            tags = original.tags,
+            authorId = authorId,
+            isPublished = false, // Le blog dupliqué n'est pas publié par défaut
+            isPrivate = original.isPrivate,
+            publishAt = null, // Pas de date de publication programmée pour la copie
+            // Statistiques remises à 0
+            postCount = 0,
+            viewCount = 0,
+            likeCount = 0,
+            shareCount = 0,
+            favoriteCount = 0
+        )
+        
+        val saved = blogRepository.save(duplicated).awaitSingle()
+        return toBlogResponse(saved)
+    }
+    
+    suspend fun getUserBlogsStats(authorId: ObjectId): Map<String, Any> {
+        val blogs = blogRepository.findByAuthorId(authorId).collectList().awaitSingle()
+        
+        val totalBlogs = blogs.size.toLong()
+        val publishedBlogs = blogs.count { it.isPublished && !it.isPrivate }.toLong()
+        val draftBlogs = blogs.count { !it.isPublished }.toLong()
+        val privateBlogs = blogs.count { it.isPrivate }.toLong()
+        
+        val totalViews = blogs.sumOf { it.viewCount }
+        val totalLikes = blogs.sumOf { it.likeCount }
+        val totalShares = blogs.sumOf { it.shareCount }
+        val totalFavorites = blogs.sumOf { it.favoriteCount }
+        val totalPosts = blogs.sumOf { it.postCount }
+        
+        val averageViewsPerBlog = if (totalBlogs > 0) totalViews / totalBlogs else 0L
+        
+        val mostViewedBlog = blogs.maxByOrNull { it.viewCount }?.let { blog ->
+            mapOf(
+                "id" to blog.id.toHexString(),
+                "title" to blog.title,
+                "viewCount" to blog.viewCount
+            )
+        }
+        
+        return mapOf(
+            "totalBlogs" to totalBlogs,
+            "publishedBlogs" to publishedBlogs,
+            "draftBlogs" to draftBlogs,
+            "privateBlogs" to privateBlogs,
+            "totalViews" to totalViews,
+            "totalLikes" to totalLikes,
+            "totalShares" to totalShares,
+            "totalFavorites" to totalFavorites,
+            "totalPosts" to totalPosts,
+            "averageViewsPerBlog" to averageViewsPerBlog,
+            "mostViewedBlog" to (mostViewedBlog ?: emptyMap<String, Any>())
+        )
     }
 
     suspend fun getPublishedBlogs(page: Int, size: Int): Flow<BlogSummaryDto> {

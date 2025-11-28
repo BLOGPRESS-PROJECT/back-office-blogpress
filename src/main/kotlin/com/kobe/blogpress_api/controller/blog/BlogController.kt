@@ -76,11 +76,21 @@ class BlogController(
 
     @GetMapping("/user")
     suspend fun getUserBlogs(
-        @AuthenticationPrincipal userId: String
+        @AuthenticationPrincipal userId: String,
+        @RequestParam(required = false) search: String?,
+        @RequestParam(required = false) status: String?,
+        @RequestParam(required = false) sortBy: String?,
+        @RequestParam(required = false, defaultValue = "desc") order: String?
     ): ResponseEntity<ApiResponseDto<Map<String, Any>>> {
         val requestId = UUID.randomUUID().toString()
-        logger.info("[$requestId] Get user blogs for user: $userId")
-        val blogs = blogService.getUserBlogs(ObjectId(userId)).toList()
+        logger.info("[$requestId] Get user blogs for user: $userId - search=$search, status=$status, sortBy=$sortBy, order=$order")
+        val blogs = blogService.getUserBlogs(
+            ObjectId(userId),
+            search = search,
+            status = status,
+            sortBy = sortBy,
+            order = order
+        )
         return ResponseEntity.ok(
             ApiResponseDto.success(
                 data = mapOf("blogs" to blogs, "total" to blogs.size),
@@ -88,6 +98,83 @@ class BlogController(
                 requestId = requestId
             )
         )
+    }
+    
+    @GetMapping("/user/stats")
+    suspend fun getUserBlogsStats(
+        @AuthenticationPrincipal userId: String
+    ): ResponseEntity<ApiResponseDto<Map<String, Any>>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] Get user blogs stats for user: $userId")
+        val stats = blogService.getUserBlogsStats(ObjectId(userId))
+        return ResponseEntity.ok(
+            ApiResponseDto.success(
+                data = stats,
+                message = "Blog statistics retrieved successfully",
+                requestId = requestId
+            )
+        )
+    }
+    
+    @PostMapping("/{blogId}/publish")
+    suspend fun publishBlog(
+        @AuthenticationPrincipal userId: String,
+        @PathVariable blogId: String
+    ): ResponseEntity<ApiResponseDto<Map<String, Any>>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] Publish blog request: $blogId by user: $userId")
+        val blog = blogService.publishBlog(ObjectId(blogId), ObjectId(userId))
+        return ResponseEntity.ok(
+            ApiResponseDto.success(
+                data = mapOf(
+                    "blogId" to blog.id,
+                    "isPublished" to blog.isPublished,
+                    "publishedAt" to (blog.publishAt?.toString())
+                ),
+                message = "Blog published successfully",
+                requestId = requestId
+            )
+        ) as ResponseEntity<ApiResponseDto<Map<String, Any>>>
+    }
+    
+    @PostMapping("/{blogId}/unpublish")
+    suspend fun unpublishBlog(
+        @AuthenticationPrincipal userId: String,
+        @PathVariable blogId: String
+    ): ResponseEntity<ApiResponseDto<Map<String, Any>>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] Unpublish blog request: $blogId by user: $userId")
+        val blog = blogService.unpublishBlog(ObjectId(blogId), ObjectId(userId))
+        return ResponseEntity.ok(
+            ApiResponseDto.success(
+                data = mapOf(
+                    "blogId" to blog.id,
+                    "isPublished" to blog.isPublished,
+                    "publishedAt" to null
+                ),
+                message = "Blog unpublished successfully",
+                requestId = requestId
+            )
+        ) as ResponseEntity<ApiResponseDto<Map<String, Any>>>
+    }
+    
+    @PostMapping("/{blogId}/duplicate")
+    suspend fun duplicateBlog(
+        @AuthenticationPrincipal userId: String,
+        @PathVariable blogId: String
+    ): ResponseEntity<ApiResponseDto<BlogResponse>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] Duplicate blog request: $blogId by user: $userId")
+        val duplicatedBlog = blogService.duplicateBlog(ObjectId(blogId), ObjectId(userId))
+        return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(
+                ApiResponseDto.success(
+                    data = duplicatedBlog,
+                    message = "Blog duplicated successfully",
+                    requestId = requestId
+                )
+            )
     }
 
     @GetMapping
