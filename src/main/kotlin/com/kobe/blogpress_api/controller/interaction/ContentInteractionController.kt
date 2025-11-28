@@ -24,14 +24,13 @@ class ContentInteractionController(
     @PostMapping("/like/toggle")
     suspend fun toggleLike(
         @AuthenticationPrincipal userId: String,
-        @PathVariable contentId: String,
-        @RequestBody request: ContentTypeRequest
+        @RequestBody request: ToggleLikeRequest
     ): ResponseEntity<ApiResponseDto<LikeResponse>> {
         val requestId = UUID.randomUUID().toString()
-        logger.info("[$requestId] Toggle like for content: $contentId by user: $userId")
+        logger.info("[$requestId] Toggle like for content: ${request.contentId} by user: $userId")
 
         val response = contentInteractionService.toggleLike(
-            ObjectId(contentId),
+            ObjectId(request.contentId),
             ObjectId(userId),
             request.contentType
         )
@@ -48,14 +47,13 @@ class ContentInteractionController(
     @PostMapping("/favorite/toggle")
     suspend fun toggleFavorite(
         @AuthenticationPrincipal userId: String,
-        @PathVariable contentId: String,
-        @RequestBody request: ContentTypeRequest
+        @RequestBody request: ToggleFavoriteRequest
     ): ResponseEntity<ApiResponseDto<FavoriteResponse>> {
         val requestId = UUID.randomUUID().toString()
-        logger.info("[$requestId] Toggle favorite for content: $contentId by user: $userId")
+        logger.info("[$requestId] Toggle favorite for content: ${request.contentId} by user: $userId")
 
         val response = contentInteractionService.toggleFavorite(
-            ObjectId(contentId),
+            ObjectId(request.contentId),
             ObjectId(userId),
             request.contentType
         )
@@ -71,13 +69,12 @@ class ContentInteractionController(
 
     @PostMapping("/view")
     suspend fun incrementView(
-        @PathVariable contentId: String,
-        @RequestBody request: ContentTypeRequest
+        @RequestBody request: ViewRequest
     ): ResponseEntity<ApiResponseDto<Nothing>> {
         val requestId = UUID.randomUUID().toString()
-        logger.info("[$requestId] Increment view for content: $contentId")
+        logger.info("[$requestId] Increment view for content: ${request.contentId}")
 
-        contentInteractionService.incrementView(ObjectId(contentId), request.contentType)
+        contentInteractionService.incrementView(ObjectId(request.contentId), request.contentType)
 
         return ResponseEntity.ok(
             ApiResponseDto.success(
@@ -90,13 +87,12 @@ class ContentInteractionController(
 
     @PostMapping("/share")
     suspend fun incrementShare(
-        @PathVariable contentId: String,
-        @RequestBody request: ContentTypeRequest
+        @RequestBody request: ShareRequest
     ): ResponseEntity<ApiResponseDto<ShareResponse>> {
         val requestId = UUID.randomUUID().toString()
-        logger.info("[$requestId] Increment share for content: $contentId")
+        logger.info("[$requestId] Increment share for content: ${request.contentId}")
 
-        val response = contentInteractionService.incrementShare(ObjectId(contentId), request.contentType)
+        val response = contentInteractionService.incrementShare(ObjectId(request.contentId), request.contentType)
 
         return ResponseEntity.ok(
             ApiResponseDto.success(
@@ -108,6 +104,22 @@ class ContentInteractionController(
     }
 }
 
-data class ContentTypeRequest(
+data class ViewRequest(
+    val contentId: String,
+    val contentType: ContentType
+)
+
+data class ToggleLikeRequest(
+    val contentId: String,
+    val contentType: ContentType
+)
+
+data class ToggleFavoriteRequest(
+    val contentId: String,
+    val contentType: ContentType
+)
+
+data class ShareRequest(
+    val contentId: String,
     val contentType: ContentType
 )
