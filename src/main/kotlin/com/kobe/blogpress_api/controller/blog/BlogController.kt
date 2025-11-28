@@ -62,7 +62,7 @@ class BlogController(
         return ResponseEntity.ok(ApiResponseDto.success(data = null, message = "Blog deleted successfully", requestId = requestId)) as ResponseEntity<ApiResponseDto<Nothing>>
     }
 
-    @GetMapping("/{slug}")
+    @GetMapping("/slug/{slug}")
     suspend fun getBlogBySlug(
         @PathVariable slug: String,
         @AuthenticationPrincipal userId: String?
@@ -71,6 +71,27 @@ class BlogController(
         logger.info("[$requestId] Get blog by slug: $slug")
         val userObjectId = userId?.let { ObjectId(it) }
         val blog = blogService.getBlogBySlug(slug, userObjectId)
+        return ResponseEntity.ok(ApiResponseDto.success(data = blog, message = "Blog retrieved successfully", requestId = requestId))
+    }
+
+    @GetMapping("/{identifier}")
+    suspend fun getBlogByIdOrSlug(
+        @PathVariable identifier: String,
+        @AuthenticationPrincipal userId: String?
+    ): ResponseEntity<ApiResponseDto<BlogResponse>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] Get blog by identifier: $identifier")
+        
+        // Détecter si c'est un ObjectId ou un slug
+        val blog = if (ObjectId.isValid(identifier)) {
+            // C'est un ObjectId
+            blogService.getBlogById(ObjectId(identifier))
+        } else {
+            // C'est probablement un slug
+            val userObjectId = userId?.let { ObjectId(it) }
+            blogService.getBlogBySlug(identifier, userObjectId)
+        }
+        
         return ResponseEntity.ok(ApiResponseDto.success(data = blog, message = "Blog retrieved successfully", requestId = requestId))
     }
 

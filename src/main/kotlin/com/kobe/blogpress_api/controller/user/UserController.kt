@@ -31,20 +31,37 @@ class UserController(
 
     @GetMapping("/me")
     suspend fun getCurrentUser(
-        @AuthenticationPrincipal userId: String
+        @AuthenticationPrincipal userId: String?
     ): ResponseEntity<ApiResponseDto<UserDTO>> {
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] Get current user: $userId")
 
-        val user = userService.findById(ObjectId(userId))
+        if (userId.isNullOrBlank()) {
+            logger.error("[$requestId] User ID is null or blank")
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponseDto.error(
+                    message = "Authentification requise",
+                    requestId = requestId
+                ))
+        }
 
-        return ResponseEntity.ok(
-            ApiResponseDto.success(
-                data = userService.toDTO(user),
-                message = "User retrieved successfully",
-                requestId = requestId
+        try {
+            val user = userService.findById(ObjectId(userId))
+            return ResponseEntity.ok(
+                ApiResponseDto.success(
+                    data = userService.toDTO(user),
+                    message = "User retrieved successfully",
+                    requestId = requestId
+                )
             )
-        )
+        } catch (e: Exception) {
+            logger.error("[$requestId] Error retrieving user", e)
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponseDto.error(
+                    message = "Erreur lors de la récupération de l'utilisateur: ${e.message}",
+                    requestId = requestId
+                ))
+        }
     }
 
     @GetMapping("/profile/{userId}")

@@ -2,6 +2,7 @@ package com.kobe.blogpress_api.configuration.security
 
 import com.kobe.blogpress_api.configuration.security.jwt.JwtAuthenticationManager
 import com.kobe.blogpress_api.configuration.security.jwt.JwtServerAuthenticationConverter
+import com.kobe.blogpress_api.configuration.security.jwt.JwtServerSecurityContextRepository
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -15,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.web.server.SecurityWebFilterChain
 import org.springframework.security.web.server.authentication.AuthenticationWebFilter
 import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository
+import org.springframework.security.web.server.context.ServerSecurityContextRepository
 import org.springframework.web.cors.CorsConfiguration
 import org.springframework.web.cors.reactive.CorsConfigurationSource
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource
@@ -25,6 +27,7 @@ import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource
 class SecurityConfig(
     private val jwtAuthenticationManager: JwtAuthenticationManager,
     private val jwtServerAuthenticationConverter: JwtServerAuthenticationConverter,
+    private val jwtServerSecurityContextRepository: JwtServerSecurityContextRepository,
 
     // ✅ Injecter les URLs configurables
     @Value("\${app.frontend-url}") private val frontendUrl: String,
@@ -35,6 +38,7 @@ class SecurityConfig(
     fun securityWebFilterChain(http: ServerHttpSecurity): SecurityWebFilterChain {
         val authenticationWebFilter = AuthenticationWebFilter(jwtAuthenticationManager).apply {
             setServerAuthenticationConverter(jwtServerAuthenticationConverter)
+            setSecurityContextRepository(jwtServerSecurityContextRepository)
         }
 
         return http
@@ -42,7 +46,7 @@ class SecurityConfig(
             .cors { it.configurationSource(corsConfigurationSource()) }
             .httpBasic { it.disable() }
             .formLogin { it.disable() }
-            .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
+            .securityContextRepository(jwtServerSecurityContextRepository)
             .authorizeExchange { exchanges ->
                 exchanges
                     // ===== ROUTES PUBLIQUES =====
@@ -50,6 +54,8 @@ class SecurityConfig(
                     .pathMatchers("/api/auth/register", "/api/auth/login", "/api/auth/refresh").permitAll()
 
                     // Lecture publique des blogs et articles
+                    // Routes spécifiques pour les slugs (doivent être avant les routes générales)
+                    .pathMatchers(HttpMethod.GET, "/api/blogs/slug/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/blogs", "/api/blogs/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/articles", "/api/articles/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/posts", "/api/posts/**").permitAll()
@@ -61,6 +67,12 @@ class SecurityConfig(
                     .pathMatchers(HttpMethod.GET, "/api/users/profile-pictures/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/users/*/profile-picture/metadata").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/users/*/profile-picture/exists").permitAll()
+
+                    // Blog Images ROUTES PUBLIQUES (cover et logo)
+                    .pathMatchers(HttpMethod.GET, "/api/blogs/*/cover-image").permitAll()
+                    .pathMatchers(HttpMethod.GET, "/api/blogs/*/logo-image").permitAll()
+                    .pathMatchers(HttpMethod.GET, "/api/blogs/cover-images/**").permitAll()
+                    .pathMatchers(HttpMethod.GET, "/api/blogs/logo-images/**").permitAll()
 
 
                     // Recherche publique
@@ -93,7 +105,7 @@ class SecurityConfig(
 
                     // ===== ROUTES UTILISATEUR AUTHENTIFIÉ =====
                     // User management
-                    .pathMatchers("/api/users/me/**").authenticated()
+                    .pathMatchers("/api/users/me", "/api/users/me/**").authenticated()
                     .pathMatchers(HttpMethod.PUT, "/api/users/**").authenticated()
                     .pathMatchers(HttpMethod.DELETE, "/api/users/**").authenticated()
                     .pathMatchers("/api/users/follow/**").authenticated()
