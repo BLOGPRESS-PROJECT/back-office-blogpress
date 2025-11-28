@@ -381,13 +381,29 @@ class BlogService(
     }
 
     private fun toBlogSummaryDto(blog: Blog): BlogSummaryDto {
+        val blogId = blog.id.toHexString()
         return BlogSummaryDto(
-            id = blog.id.toHexString(),
+            id = blogId,
             title = blog.title,
             description = blog.description,
             slug = blog.slug,
-            logoImageUrl = normalizeImageUrl(blog.logoImageUrl),
-            coverImageUrl = normalizeImageUrl(blog.coverImageUrl),
+            // ⚠️ IMPORTANT : Retourner les URLs API au lieu des chemins directs
+            logoImageUrl = normalizeImageUrl(blog.logoImageUrl)?.let { url ->
+                if (url.startsWith("/uploads/")) {
+                    // Convertir le chemin en URL API
+                    "/api/blogs/$blogId/logo-image"
+                } else {
+                    url // Garder les URLs externes telles quelles
+                }
+            },
+            coverImageUrl = normalizeImageUrl(blog.coverImageUrl)?.let { url ->
+                if (url.startsWith("/uploads/")) {
+                    // Convertir le chemin en URL API
+                    "/api/blogs/$blogId/cover-image"
+                } else {
+                    url // Garder les URLs externes telles quelles
+                }
+            },
             tags = blog.tags.takeIf { it.isNotEmpty() },
             authorId = blog.authorId.toHexString(),
             isPublished = blog.isPublished,
