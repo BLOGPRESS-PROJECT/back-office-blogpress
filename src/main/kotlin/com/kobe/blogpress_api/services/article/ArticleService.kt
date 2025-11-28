@@ -38,6 +38,17 @@ class ArticleService(
         val slug = articleSlugService.generateUniqueSlug(request.title)
         val readTime = calculateReadTime(request.content)
 
+        // Si publishAt est défini et dans le futur, l'article ne doit pas être publié immédiatement
+        val now = Instant.now()
+        val shouldBePublished = when {
+            request.publishAt != null -> {
+                // Si publishAt est dans le passé ou maintenant, publier immédiatement
+                // Sinon, ne pas publier (sera publié automatiquement par la tâche planifiée)
+                !request.publishAt.isAfter(now) && request.isPublished
+            }
+            else -> request.isPublished
+        }
+
         val article = Article(
             title = request.title,
             content = request.content,
@@ -49,7 +60,7 @@ class ArticleService(
             authorId = authorId,
             blogId = null,
             type = ArticleType.SIMPLE_ARTICLE,
-            isPublished = request.isPublished,
+            isPublished = shouldBePublished,
             isPrivate = request.isPrivate,
             publishAt = request.publishAt,
             readTime = readTime
@@ -75,6 +86,17 @@ class ArticleService(
         val slug = articleSlugService.generateUniqueSlug(request.title, blogId = blogId)
         val readTime = calculateReadTime(request.content)
 
+        // Si publishAt est défini et dans le futur, l'article ne doit pas être publié immédiatement
+        val now = Instant.now()
+        val shouldBePublished = when {
+            request.publishAt != null -> {
+                // Si publishAt est dans le passé ou maintenant, publier immédiatement
+                // Sinon, ne pas publier (sera publié automatiquement par la tâche planifiée)
+                !request.publishAt.isAfter(now) && request.isPublished
+            }
+            else -> request.isPublished
+        }
+
         val article = Article(
             title = request.title,
             content = request.content,
@@ -86,7 +108,7 @@ class ArticleService(
             authorId = authorId,
             blogId = blogId,
             type = ArticleType.BLOG_POST,
-            isPublished = request.isPublished,
+            isPublished = shouldBePublished,
             isPrivate = request.isPrivate,
             publishAt = request.publishAt,
             readTime = readTime
@@ -193,6 +215,30 @@ class ArticleService(
             article.readTime
         }
 
+        // Gérer la publication programmée
+        val now = Instant.now()
+        val finalPublishAt = request.publishAt ?: article.publishAt
+        val finalIsPublished = when {
+            request.isPublished != null -> {
+                // Si l'utilisateur définit explicitement isPublished
+                if (finalPublishAt != null && finalPublishAt.isAfter(now)) {
+                    // Si publishAt est dans le futur, ne pas publier maintenant
+                    false
+                } else {
+                    request.isPublished
+                }
+            }
+            finalPublishAt != null && finalPublishAt.isAfter(now) -> {
+                // Si publishAt est dans le futur et isPublished n'est pas défini, ne pas publier
+                false
+            }
+            finalPublishAt != null && !finalPublishAt.isAfter(now) -> {
+                // Si publishAt est dans le passé ou maintenant, publier
+                true
+            }
+            else -> article.isPublished
+        }
+
         val updatedArticle = article.copy(
             title = request.title ?: article.title,
             content = request.content ?: article.content,
@@ -201,9 +247,9 @@ class ArticleService(
             coverImageUrl = request.coverImageUrl ?: article.coverImageUrl,
             tags = request.tags ?: article.tags,
             category = request.category ?: article.category,
-            isPublished = request.isPublished ?: article.isPublished,
+            isPublished = finalIsPublished,
             isPrivate = request.isPrivate ?: article.isPrivate,
-            publishAt = request.publishAt ?: article.publishAt,
+            publishAt = finalPublishAt,
             readTime = newReadTime,
             updatedAt = Instant.now()
         )

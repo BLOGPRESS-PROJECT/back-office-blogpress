@@ -45,6 +45,11 @@ dependencies {
 	runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
 
 	// ==========================================
+	// SWAGGER/OPENAPI DOCUMENTATION
+	// ==========================================
+	implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:2.6.0")
+
+	// ==========================================
 	// DEVELOPMENT TOOLS
 	// ==========================================
 	developmentOnly("org.springframework.boot:spring-boot-devtools")

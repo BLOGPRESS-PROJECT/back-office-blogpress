@@ -1,7 +1,6 @@
 package com.kobe.blogpress_api.dto.blog
 
 import jakarta.validation.constraints.Size
-import java.time.Instant
 
 data class BlogSummaryDto(
     val id: String,
@@ -10,13 +9,13 @@ data class BlogSummaryDto(
     val slug: String,
     val logoImageUrl: String?,
     val coverImageUrl: String?,
-    val tags: List<String>,
+    val tags: List<String>?,
     val authorId: String,
     val isPublished: Boolean,
     val isPrivate: Boolean,
-    val publicUrl: String?,
-    val createdAt: Instant,
-    val updatedAt: Instant,
+    val publicUrl: String,
+    val createdAt: String, // ISO 8601 format
+    val updatedAt: String, // ISO 8601 format
     val postCount: Long,
     val stats: BlogStats
 )

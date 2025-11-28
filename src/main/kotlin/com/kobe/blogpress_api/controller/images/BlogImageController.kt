@@ -104,7 +104,7 @@ class BlogImageController(
             fileStorageService.deleteBlogCoverImage(blog.coverImageUrl)
         }
 
-        blogService.updateBlog(ObjectId(blogId), UpdateBlogRequest(coverImageUrl = ""), ObjectId(userId))
+        blogService.updateBlog(ObjectId(blogId), UpdateBlogRequest(coverImageUrl = null), ObjectId(userId))
 
         return ResponseEntity.ok(
             ApiResponseDto.Companion.success(
@@ -132,7 +132,7 @@ class BlogImageController(
             fileStorageService.deleteBlogLogoImage(blog.logoImageUrl)
         }
 
-        blogService.updateBlog(ObjectId(blogId), UpdateBlogRequest(logoImageUrl = ""), ObjectId(userId))
+        blogService.updateBlog(ObjectId(blogId), UpdateBlogRequest(logoImageUrl = null), ObjectId(userId))
 
         return ResponseEntity.ok(
             ApiResponseDto.Companion.success(

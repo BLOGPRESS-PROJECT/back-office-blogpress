@@ -34,6 +34,18 @@ class BlogService(
 
     suspend fun createBlog(request: CreateBlogRequest, authorId: ObjectId): BlogResponse {
         val slug = blogSlugService.generateUniqueSlug(request.title)
+        
+        // Si publishAt est défini et dans le futur, le blog ne doit pas être publié immédiatement
+        val now = Instant.now()
+        val shouldBePublished = when {
+            request.publishAt != null -> {
+                // Si publishAt est dans le passé ou maintenant, publier immédiatement
+                // Sinon, ne pas publier (sera publié automatiquement par la tâche planifiée)
+                !request.publishAt.isAfter(now) && request.isPublished
+            }
+            else -> request.isPublished
+        }
+        
         val blog = Blog(
             title = request.title,
             description = request.description,
@@ -41,7 +53,7 @@ class BlogService(
             logoImageUrl = request.logoImageUrl,
             coverImageUrl = request.coverImageUrl,
             authorId = authorId,
-            isPublished = request.isPublished,
+            isPublished = shouldBePublished,
             isPrivate = request.isPrivate,
             publishAt = request.publishAt,
             tags = request.tags
@@ -58,16 +70,45 @@ class BlogService(
         val newSlug = if (request.title != null && request.title != existing.title) {
             blogSlugService.generateUniqueSlug(request.title, blogId)
         } else existing.slug
+        // Normaliser les URLs d'images : convertir les chaînes vides en null
+        val normalizedLogoImageUrl = request.logoImageUrl?.takeIf { it.isNotBlank() }
+        val normalizedCoverImageUrl = request.coverImageUrl?.takeIf { it.isNotBlank() }
+        
+        // Gérer la publication programmée
+        val now = Instant.now()
+        val finalPublishAt = request.publishAt ?: existing.publishAt
+        val finalIsPublished = when {
+            request.isPublished != null -> {
+                // Si l'utilisateur définit explicitement isPublished
+                if (finalPublishAt != null && finalPublishAt.isAfter(now)) {
+                    // Si publishAt est dans le futur, ne pas publier maintenant
+                    false
+                } else {
+                    request.isPublished
+                }
+            }
+            finalPublishAt != null && finalPublishAt.isAfter(now) -> {
+                // Si publishAt est dans le futur et isPublished n'est pas défini, ne pas publier
+                false
+            }
+            finalPublishAt != null && !finalPublishAt.isAfter(now) -> {
+                // Si publishAt est dans le passé ou maintenant, publier
+                true
+            }
+            else -> existing.isPublished
+        }
+        
         val updated = existing.copy(
             title = request.title ?: existing.title,
             description = request.description ?: existing.description,
             slug = newSlug,
-            logoImageUrl = request.logoImageUrl ?: existing.logoImageUrl,
-            coverImageUrl = request.coverImageUrl ?: existing.coverImageUrl,
+            // Si une valeur est fournie (même null), l'utiliser. Sinon, garder l'ancienne valeur
+            logoImageUrl = if (request.logoImageUrl != null) normalizedLogoImageUrl else existing.logoImageUrl,
+            coverImageUrl = if (request.coverImageUrl != null) normalizedCoverImageUrl else existing.coverImageUrl,
             tags = request.tags ?: existing.tags,
-            isPublished = request.isPublished ?: existing.isPublished,
+            isPublished = finalIsPublished,
             isPrivate = request.isPrivate ?: existing.isPrivate,
-            publishAt = request.publishAt ?: existing.publishAt,
+            publishAt = finalPublishAt,
             updatedAt = Instant.now()
         )
         val saved = blogRepository.save(updated).awaitSingle()
@@ -194,15 +235,15 @@ class BlogService(
             title = blog.title,
             description = blog.description,
             slug = blog.slug,
-            logoImageUrl = blog.logoImageUrl,
-            coverImageUrl = blog.coverImageUrl,
-            tags = blog.tags,
+            logoImageUrl = normalizeImageUrl(blog.logoImageUrl),
+            coverImageUrl = normalizeImageUrl(blog.coverImageUrl),
+            tags = blog.tags.takeIf { it.isNotEmpty() },
             authorId = blog.authorId.toHexString(),
             isPublished = blog.isPublished,
             isPrivate = blog.isPrivate,
             publicUrl = "$baseUrl/blog/${blog.slug}",
-            createdAt = blog.createdAt,
-            updatedAt = blog.updatedAt,
+            createdAt = blog.createdAt.toString(), // ISO 8601 format
+            updatedAt = blog.updatedAt.toString(), // ISO 8601 format
             postCount = blog.postCount,
             stats = BlogStats(
                 viewCount = blog.viewCount,
@@ -211,5 +252,29 @@ class BlogService(
                 favoriteCount = blog.favoriteCount
             )
         )
+    }
+
+    /**
+     * Normalise les URLs d'images pour le frontend :
+     * - Retourne null si l'URL est null ou vide
+     * - Retourne l'URL telle quelle si c'est une URL externe (http:// ou https://)
+     * - S'assure que les chemins locaux commencent par "/"
+     */
+    private fun normalizeImageUrl(url: String?): String? {
+        if (url.isNullOrBlank()) {
+            return null
+        }
+        
+        // Si c'est déjà une URL externe, la retourner telle quelle
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+            return url
+        }
+        
+        // Si c'est un chemin local, s'assurer qu'il commence par "/"
+        return if (url.startsWith("/")) {
+            url
+        } else {
+            "/$url"
+        }
     }
 }
