@@ -32,7 +32,8 @@ class BlogService(
     private val blogRepository: BlogRepository,
     private val blogSlugService: BlogSlugService,
     private val mongoTemplate: ReactiveMongoTemplate,
-    @Value("\${app.base-url:http://localhost:8090}") private val baseUrl: String
+    @Value("\${app.base-url:http://localhost:8090}") private val baseUrl: String,
+    @Value("\${app.frontend-url:http://localhost:3000}") private val frontendUrl: String
 ) {
 
     suspend fun createBlog(request: CreateBlogRequest, authorId: ObjectId): BlogResponse {
@@ -49,6 +50,9 @@ class BlogService(
             else -> request.isPublished
         }
         
+        // Générer l'URL publique
+        val publicUrl = "$frontendUrl/blog/$slug"
+        
         val blog = Blog(
             title = request.title,
             description = request.description,
@@ -59,6 +63,9 @@ class BlogService(
             isPublished = shouldBePublished,
             isPrivate = request.isPrivate,
             publishAt = request.publishAt,
+            lastPublishedAt = if (shouldBePublished) now else null,
+            publicUrl = publicUrl,
+            canonicalUrl = publicUrl, // Par défaut, l'URL publique est aussi l'URL canonique
             tags = request.tags
         )
         val saved = blogRepository.save(blog).awaitSingle()
@@ -73,6 +80,12 @@ class BlogService(
         val newSlug = if (request.title != null && request.title != existing.title) {
             blogSlugService.generateUniqueSlug(request.title, blogId)
         } else existing.slug
+        
+        // Recalculer l'URL publique si le slug a changé
+        val newPublicUrl = if (newSlug != existing.slug) {
+            "$frontendUrl/blog/$newSlug"
+        } else existing.publicUrl
+        
         // Normaliser les URLs d'images : convertir les chaînes vides en null
         val normalizedLogoImageUrl = request.logoImageUrl?.takeIf { it.isNotBlank() }
         val normalizedCoverImageUrl = request.coverImageUrl?.takeIf { it.isNotBlank() }
@@ -101,6 +114,12 @@ class BlogService(
             else -> existing.isPublished
         }
         
+        // Mettre à jour lastPublishedAt si le blog vient d'être publié
+        val newLastPublishedAt = when {
+            !existing.isPublished && finalIsPublished -> now // Vient d'être publié
+            else -> existing.lastPublishedAt
+        }
+        
         val updated = existing.copy(
             title = request.title ?: existing.title,
             description = request.description ?: existing.description,
@@ -112,6 +131,9 @@ class BlogService(
             isPublished = finalIsPublished,
             isPrivate = request.isPrivate ?: existing.isPrivate,
             publishAt = finalPublishAt,
+            lastPublishedAt = newLastPublishedAt,
+            publicUrl = newPublicUrl,
+            canonicalUrl = newPublicUrl, // Mettre à jour l'URL canonique aussi
             updatedAt = Instant.now()
         )
         val saved = blogRepository.save(updated).awaitSingle()
@@ -208,6 +230,7 @@ class BlogService(
         val updated = blog.copy(
             isPublished = true,
             publishAt = if (blog.publishAt == null || blog.publishAt.isAfter(now)) now else blog.publishAt,
+            lastPublishedAt = now, // Mettre à jour la date de dernière publication
             updatedAt = now
         )
         val saved = blogRepository.save(updated).awaitSingle()
@@ -236,6 +259,7 @@ class BlogService(
         
         val newTitle = "${original.title} (copy)"
         val newSlug = blogSlugService.generateUniqueSlug(newTitle)
+        val newPublicUrl = "$frontendUrl/blog/$newSlug"
         
         val duplicated = Blog(
             title = newTitle,
@@ -248,6 +272,9 @@ class BlogService(
             isPublished = false, // Le blog dupliqué n'est pas publié par défaut
             isPrivate = original.isPrivate,
             publishAt = null, // Pas de date de publication programmée pour la copie
+            lastPublishedAt = null, // Pas de date de publication pour la copie
+            publicUrl = newPublicUrl,
+            canonicalUrl = newPublicUrl,
             // Statistiques remises à 0
             postCount = 0,
             viewCount = 0,
@@ -369,7 +396,7 @@ class BlogService(
             isPublished = blog.isPublished,
             isPrivate = blog.isPrivate,
             publishAt = blog.publishAt,
-            publicUrl = "$baseUrl/blog/${blog.slug}",
+            publicUrl = blog.publicUrl, // Utiliser la valeur stockée en base
             createdAt = blog.createdAt,
             updatedAt = blog.updatedAt,
             postCount = blog.postCount,
@@ -408,7 +435,7 @@ class BlogService(
             authorId = blog.authorId.toHexString(),
             isPublished = blog.isPublished,
             isPrivate = blog.isPrivate,
-            publicUrl = "$baseUrl/blog/${blog.slug}",
+            publicUrl = blog.publicUrl, // Utiliser la valeur stockée en base
             createdAt = blog.createdAt.toString(), // ISO 8601 format
             updatedAt = blog.updatedAt.toString(), // ISO 8601 format
             postCount = blog.postCount,

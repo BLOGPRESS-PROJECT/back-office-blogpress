@@ -33,6 +33,11 @@ data class Blog(
     val isPublished: Boolean = false,
     val isPrivate: Boolean = false,
     val publishAt: Instant? = null,
+    val lastPublishedAt: Instant? = null, // Date de dernière publication
+
+    // URLs
+    val publicUrl: String, // URL publique complète du blog (stockée en base)
+    val canonicalUrl: String? = null, // URL canonique pour le SEO (optionnel)
 
     @Indexed
     @CreatedDate

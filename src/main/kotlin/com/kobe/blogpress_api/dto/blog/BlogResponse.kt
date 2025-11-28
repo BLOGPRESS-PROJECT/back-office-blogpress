@@ -14,7 +14,7 @@ data class BlogResponse(
     val isPublished: Boolean,
     val isPrivate: Boolean,
     val publishAt: Instant?,
-    val publicUrl: String?,
+    val publicUrl: String, // URL publique complète du blog (non-nullable)
     val createdAt: Instant,
     val updatedAt: Instant,
     val postCount: Long,
