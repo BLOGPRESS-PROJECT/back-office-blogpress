@@ -179,30 +179,46 @@ class BlogService(
     suspend fun getBlogBySlug(slug: String, userId: ObjectId? = null): BlogResponse {
         val blog = blogRepository.findBySlug(slug).awaitSingleOrNull()
             ?: error("Blog not found with slug: $slug")
-        if (blog.isPrivate && blog.authorId != userId) {
-            error("This blog is private")
+        
+        // Le créateur peut toujours voir son blog, même s'il n'est pas publié
+        val isOwner = blog.authorId == userId
+        
+        // Vérifications pour les utilisateurs non-propriétaires
+        if (!isOwner) {
+            if (blog.isPrivate) {
+                error("This blog is private")
+            }
+            if (!blog.isPublished) {
+                error("This blog is not published yet")
+            }
+            if (blog.publishAt != null && blog.publishAt.isAfter(Instant.now())) {
+                error("Content not yet published")
+            }
         }
-        if (!blog.isPublished && blog.authorId != userId) {
-            error("This blog is not published yet")
-        }
-        if (blog.publishAt != null && blog.publishAt.isAfter(Instant.now()) && blog.authorId != userId) {
-            error("Content not yet published")
-        }
+        
         return toBlogResponse(blog)
     }
     
     suspend fun getBlogByShareId(shareId: String, userId: ObjectId? = null): BlogResponse {
         val blog = blogRepository.findByShareId(shareId).awaitSingleOrNull()
             ?: error("Blog not found with shareId: $shareId")
-        if (blog.isPrivate && blog.authorId != userId) {
-            error("This blog is private")
+        
+        // Le créateur peut toujours voir son blog, même s'il n'est pas publié
+        val isOwner = blog.authorId == userId
+        
+        // Vérifications pour les utilisateurs non-propriétaires
+        if (!isOwner) {
+            if (blog.isPrivate) {
+                error("This blog is private")
+            }
+            if (!blog.isPublished) {
+                error("This blog is not published yet")
+            }
+            if (blog.publishAt != null && blog.publishAt.isAfter(Instant.now())) {
+                error("Content not yet published")
+            }
         }
-        if (!blog.isPublished && blog.authorId != userId) {
-            error("This blog is not published yet")
-        }
-        if (blog.publishAt != null && blog.publishAt.isAfter(Instant.now()) && blog.authorId != userId) {
-            error("Content not yet published")
-        }
+        
         return toBlogResponse(blog)
     }
 
