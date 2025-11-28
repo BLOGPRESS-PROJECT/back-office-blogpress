@@ -136,12 +136,66 @@ class GlobalExceptionHandler {
     @ExceptionHandler(IllegalStateException::class)
     fun handleIllegalState(ex: IllegalStateException): ResponseEntity<ApiResponseDto<Nothing>> {
         logger.warn("Illegal state: ${ex.message}")
+        // Vérifier si c'est une erreur liée à un blog non publié
+        if (ex.message?.contains("not published", ignoreCase = true) == true) {
+            return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(
+                    ApiResponseDto.error(
+                        message = "Le blog recherché n'est pas encore disponible",
+                        errorCode = "BLOG_NOT_PUBLISHED",
+                        requestId = UUID.randomUUID().toString()
+                    )
+                )
+        }
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
             .body(
                 ApiResponseDto.error(
                     message = ex.message ?: "Invalid state",
                     errorCode = "INVALID_STATE",
+                    requestId = UUID.randomUUID().toString()
+                )
+            )
+    }
+    
+    @ExceptionHandler(BlogNotFoundException::class)
+    fun handleBlogNotFound(ex: BlogNotFoundException): ResponseEntity<ApiResponseDto<Nothing>> {
+        logger.warn("Blog not found: ${ex.message}")
+        return ResponseEntity
+            .status(HttpStatus.NOT_FOUND)
+            .body(
+                ApiResponseDto.error(
+                    message = ex.message ?: "Le blog recherché n'est pas disponible",
+                    errorCode = "BLOG_NOT_FOUND",
+                    requestId = UUID.randomUUID().toString()
+                )
+            )
+    }
+    
+    @ExceptionHandler(BlogNotPublishedException::class)
+    fun handleBlogNotPublished(ex: BlogNotPublishedException): ResponseEntity<ApiResponseDto<Nothing>> {
+        logger.warn("Blog not published: ${ex.message}")
+        return ResponseEntity
+            .status(HttpStatus.NOT_FOUND)
+            .body(
+                ApiResponseDto.error(
+                    message = ex.message ?: "Le blog recherché n'est pas encore disponible",
+                    errorCode = "BLOG_NOT_PUBLISHED",
+                    requestId = UUID.randomUUID().toString()
+                )
+            )
+    }
+    
+    @ExceptionHandler(BlogPrivateException::class)
+    fun handleBlogPrivate(ex: BlogPrivateException): ResponseEntity<ApiResponseDto<Nothing>> {
+        logger.warn("Blog is private: ${ex.message}")
+        return ResponseEntity
+            .status(HttpStatus.FORBIDDEN)
+            .body(
+                ApiResponseDto.error(
+                    message = ex.message ?: "Ce blog est privé",
+                    errorCode = "BLOG_PRIVATE",
                     requestId = UUID.randomUUID().toString()
                 )
             )
@@ -163,16 +217,18 @@ class GlobalExceptionHandler {
 
     @ExceptionHandler(ContentNotYetPublishedException::class)
     fun handleContentNotYetPublished(ex: ContentNotYetPublishedException): ResponseEntity<ApiResponseDto<Nothing>> {
+        logger.warn("Content not yet published: ${ex.message}")
         return ResponseEntity
-            .status(HttpStatus.FORBIDDEN)
+            .status(HttpStatus.NOT_FOUND)
             .body(
                 ApiResponseDto.error(
-                    message = ex.message ?: "Content not yet published",
+                    message = "Le blog recherché n'est pas encore disponible",
                     errorCode = "CONTENT_NOT_YET_PUBLISHED",
                     errorDetails = mapOf(
                         "publishAt" to ex.publishAt.toString(),
                         "timeRemaining" to ex.getTimeRemaining()
-                    )
+                    ),
+                    requestId = UUID.randomUUID().toString()
                 )
             )
     }

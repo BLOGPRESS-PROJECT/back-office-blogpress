@@ -12,6 +12,10 @@ import org.springframework.data.mongodb.core.query.Query
 import org.springframework.data.mongodb.core.query.Update
 import com.kobe.blogpress_api.repository.blog.BlogRepository
 import com.kobe.blogpress_api.services.fileStorage.FileStorageService
+import com.kobe.blogpress_api.exception.BlogNotFoundException
+import com.kobe.blogpress_api.exception.BlogNotPublishedException
+import com.kobe.blogpress_api.exception.BlogPrivateException
+import com.kobe.blogpress_api.exception.ContentNotYetPublishedException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -178,7 +182,7 @@ class BlogService(
 
     suspend fun getBlogBySlug(slug: String, userId: ObjectId? = null): BlogResponse {
         val blog = blogRepository.findBySlug(slug).awaitSingleOrNull()
-            ?: error("Blog not found with slug: $slug")
+            ?: throw BlogNotFoundException("Le blog recherché n'est pas disponible")
         
         // Le créateur peut toujours voir son blog, même s'il n'est pas publié
         val isOwner = blog.authorId == userId
@@ -186,13 +190,16 @@ class BlogService(
         // Vérifications pour les utilisateurs non-propriétaires
         if (!isOwner) {
             if (blog.isPrivate) {
-                error("This blog is private")
+                throw BlogPrivateException("Ce blog est privé")
             }
             if (!blog.isPublished) {
-                error("This blog is not published yet")
+                throw BlogNotPublishedException("Le blog recherché n'est pas encore disponible")
             }
             if (blog.publishAt != null && blog.publishAt.isAfter(Instant.now())) {
-                error("Content not yet published")
+                throw ContentNotYetPublishedException(
+                    blog.publishAt,
+                    "Blog"
+                )
             }
         }
         
@@ -201,7 +208,7 @@ class BlogService(
     
     suspend fun getBlogByShareId(shareId: String, userId: ObjectId? = null): BlogResponse {
         val blog = blogRepository.findByShareId(shareId).awaitSingleOrNull()
-            ?: error("Blog not found with shareId: $shareId")
+            ?: throw BlogNotFoundException("Le blog recherché n'est pas disponible")
         
         // Le créateur peut toujours voir son blog, même s'il n'est pas publié
         val isOwner = blog.authorId == userId
@@ -209,13 +216,16 @@ class BlogService(
         // Vérifications pour les utilisateurs non-propriétaires
         if (!isOwner) {
             if (blog.isPrivate) {
-                error("This blog is private")
+                throw BlogPrivateException("Ce blog est privé")
             }
             if (!blog.isPublished) {
-                error("This blog is not published yet")
+                throw BlogNotPublishedException("Le blog recherché n'est pas encore disponible")
             }
             if (blog.publishAt != null && blog.publishAt.isAfter(Instant.now())) {
-                error("Content not yet published")
+                throw ContentNotYetPublishedException(
+                    blog.publishAt,
+                    "Blog"
+                )
             }
         }
         
