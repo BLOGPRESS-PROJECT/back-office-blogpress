@@ -80,6 +80,10 @@ class SecurityConfig(
                     .pathMatchers(HttpMethod.GET, "/api/search", "/api/search/**").permitAll()
 
                     // Interactions publiques (views, shares)
+                    // ⭐ IMPORTANT : Routes pour /api/interactions/view et /api/interactions/share
+                    .pathMatchers(HttpMethod.POST, "/api/interactions/view").permitAll()
+                    .pathMatchers(HttpMethod.POST, "/api/interactions/share").permitAll()
+                    // Anciennes routes (pour compatibilité si elles existent encore)
                     .pathMatchers(HttpMethod.POST, "/api/content/*/view").permitAll()
                     .pathMatchers(HttpMethod.POST, "/api/content/*/share").permitAll()
 
