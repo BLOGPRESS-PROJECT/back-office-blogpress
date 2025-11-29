@@ -21,6 +21,8 @@ import org.bson.types.ObjectId
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
+import org.springframework.data.mongodb.core.query.Criteria
+import org.springframework.data.mongodb.core.query.Query
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.UUID
@@ -30,6 +32,8 @@ class ArticleService(
     private val articleRepository: ArticleRepository,
     private val blogRepository: BlogRepository,
     private val articleSlugService: ArticleSlugService,
+    private val favoriteRepository: com.kobe.blogpress_api.repository.interaction.FavoriteRepository,
+    private val mongoTemplate: org.springframework.data.mongodb.core.ReactiveMongoTemplate,
     @Value("\${app.base-url:http://localhost:8090}") private val baseUrl: String,
     @Value("\${app.frontend-url:http://localhost:3000}") private val frontendUrl: String
 ) {
@@ -217,6 +221,28 @@ class ArticleService(
             .map { toArticleSummaryDto(it) }
     }
 
+    suspend fun getFavoriteArticles(userId: ObjectId, page: Int, size: Int): Flow<ArticleSummaryDto> {
+        val contentType = com.kobe.blogpress_api.domain.interaction.ContentType.ARTICLE
+        
+        // Récupérer les IDs des articles favoris
+        val favoriteIds = favoriteRepository.findByUserIdAndContentType(userId, contentType)
+            .map { it.contentId }
+            .collectList()
+            .awaitSingle()
+        
+        if (favoriteIds.isEmpty()) {
+            return kotlinx.coroutines.flow.emptyFlow()
+        }
+        
+        // Récupérer les articles correspondants
+        val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
+        val query = Query(Criteria.where("_id").`in`(favoriteIds)).with(pageable)
+        
+        return mongoTemplate.find(query, Article::class.java)
+            .asFlow()
+            .map { toArticleSummaryDto(it) }
+    }
+
     // ===== MISE À JOUR =====
 
     suspend fun updateArticle(articleId: ObjectId, request: UpdateArticleRequest, authorId: ObjectId): ArticleResponse {
@@ -339,6 +365,18 @@ class ArticleService(
         articleRepository.save(updatedArticle).awaitSingle()
     }
 
+    suspend fun incrementFavoriteCount(articleId: ObjectId) {
+        val article = findById(articleId)
+        val updatedArticle = article.copy(favoriteCount = article.favoriteCount + 1)
+        articleRepository.save(updatedArticle).awaitSingle()
+    }
+
+    suspend fun decrementFavoriteCount(articleId: ObjectId) {
+        val article = findById(articleId)
+        val updatedArticle = article.copy(favoriteCount = maxOf(0, article.favoriteCount - 1))
+        articleRepository.save(updatedArticle).awaitSingle()
+    }
+
     // ===== HELPERS =====
 
     private suspend fun findById(articleId: ObjectId): Article {
@@ -388,7 +426,7 @@ class ArticleService(
         // Convertir les URLs d'images locales en URLs API
         val coverImageUrl = article.coverImageUrl?.let { url ->
             if (url.startsWith("/uploads/article-covers/") || url.contains("article-covers")) {
-                "/api/articles/${article.id.toHexString()}/cover-image"
+                "/api/articles/images/${article.id.toHexString()}/cover-image"
             } else {
                 url
             }
@@ -417,6 +455,7 @@ class ArticleService(
             likeCount = article.likeCount,
             commentCount = article.commentCount,
             shareCount = article.shareCount,
+            favoriteCount = article.favoriteCount,
             readTime = article.readTime
         )
     }
@@ -426,7 +465,7 @@ class ArticleService(
         // Convertir les URLs d'images locales en URLs API
         val coverImageUrl = article.coverImageUrl?.let { url ->
             if (url.startsWith("/uploads/article-covers/") || url.contains("article-covers")) {
-                "/api/articles/${article.id.toHexString()}/cover-image"
+                "/api/articles/images/${article.id.toHexString()}/cover-image"
             } else {
                 url
             }
@@ -454,7 +493,8 @@ class ArticleService(
                 viewCount = article.viewCount,
                 likeCount = article.likeCount,
                 commentCount = article.commentCount,
-                shareCount = article.shareCount
+                shareCount = article.shareCount,
+                favoriteCount = article.favoriteCount
             )
         )
     }

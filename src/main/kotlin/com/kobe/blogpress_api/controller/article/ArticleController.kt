@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*
 import java.util.*
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/articles")
 class ArticleController(
     private val articleService: ArticleService
 ) {
@@ -28,7 +28,7 @@ class ArticleController(
 
     // ===== ARTICLES SIMPLES =====
 
-    @PostMapping("/articles")
+    @PostMapping
     suspend fun createSimpleArticle(
         @AuthenticationPrincipal userId: String,
         @Valid @RequestBody request: CreateArticleRequest
@@ -50,7 +50,7 @@ class ArticleController(
             )
     }
 
-    @GetMapping("/articles/{slug}")
+    @GetMapping("/slug/{slug}")
     suspend fun getSimpleArticleBySlug(
         @PathVariable slug: String,
         @AuthenticationPrincipal userId: String?
@@ -71,7 +71,7 @@ class ArticleController(
     }
     
     // ⭐ NOUVEAU : Récupérer un article par son shareId
-    @GetMapping("/articles/share/{shareId}")
+    @GetMapping("/share/{shareId}")
     suspend fun getArticleByShareId(
         @PathVariable shareId: String,
         @AuthenticationPrincipal userId: String?
@@ -115,7 +115,7 @@ class ArticleController(
         }
     }
 
-    @GetMapping("/articles")
+    @GetMapping
     suspend fun getPublishedSimpleArticles(
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int
@@ -202,7 +202,7 @@ class ArticleController(
 
     // ===== GESTION COMMUNE =====
 
-    @GetMapping("/articles/user")
+    @GetMapping("/user")
     suspend fun getUserArticles(
         @AuthenticationPrincipal userId: String,
         @RequestParam(required = false) type: ArticleType?
@@ -224,7 +224,27 @@ class ArticleController(
         )
     }
 
-    @PutMapping("/articles/{articleId}")
+    @GetMapping("/favorites")
+    suspend fun getFavoriteArticles(
+        @AuthenticationPrincipal userId: String,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int
+    ): ResponseEntity<ApiResponseDto<List<ArticleSummaryDto>>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] Get favorite articles for user: $userId - page=$page, size=$size")
+        
+        val articles = articleService.getFavoriteArticles(ObjectId(userId), page, size).toList()
+        
+        return ResponseEntity.ok(
+            ApiResponseDto.success(
+                data = articles,
+                message = "Favorite articles retrieved successfully",
+                requestId = requestId
+            )
+        )
+    }
+
+    @PutMapping("/{articleId}")
     suspend fun updateArticle(
         @AuthenticationPrincipal userId: String,
         @PathVariable articleId: String,
@@ -245,7 +265,7 @@ class ArticleController(
         )
     }
 
-    @DeleteMapping("/articles/{articleId}")
+    @DeleteMapping("/{articleId}")
     suspend fun deleteArticle(
         @AuthenticationPrincipal userId: String,
         @PathVariable articleId: String

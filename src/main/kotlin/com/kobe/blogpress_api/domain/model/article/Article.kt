@@ -56,6 +56,7 @@ data class Article(
     val likeCount: Long = 0,
     val commentCount: Long = 0,
     val shareCount: Long = 0,
+    val favoriteCount: Long = 0,
     // Calculé automatiquement
     val readTime: Int = 1 // En minutes
 )

@@ -26,5 +26,6 @@ data class ArticleResponse(
     val likeCount: Long,
     val commentCount: Long,
     val shareCount: Long,
+    val favoriteCount: Long,
     val readTime: Int
 )

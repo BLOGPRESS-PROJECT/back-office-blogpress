@@ -19,7 +19,7 @@ import java.nio.file.Files
 import java.util.*
 
 @RestController
-@RequestMapping("/api/articles")
+@RequestMapping("/api/articles/images")
 class ArticleImageController(
     private val articleService: ArticleService,
     private val fileStorageService: FileStorageService,
