@@ -143,7 +143,7 @@ class AuthService(
         return generateAuthResponse(user)
     }
 
-    private fun generateAuthResponse(user: User): AuthResponseDTO {
+    private suspend fun generateAuthResponse(user: User): AuthResponseDTO {
         val accessToken = jwtService.generateAccessToken(user.id, user.email, user.role)
         val refreshToken = jwtService.generateRefreshToken(user.id)
 

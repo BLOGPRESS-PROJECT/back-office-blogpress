@@ -72,6 +72,7 @@ data class SocialLinks(
 
 data class UserStatistics(
     val totalPosts: Long = 0,
+    val totalBlogs: Long = 0,  // ⭐ NOUVEAU : Nombre de blogs créés par l'utilisateur
     val totalViews: Long = 0,
     val totalLikes: Long = 0,
     val totalComments: Long = 0,

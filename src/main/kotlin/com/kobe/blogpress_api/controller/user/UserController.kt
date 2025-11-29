@@ -10,6 +10,9 @@ import com.kobe.blogpress_api.exception.ResourceNotFoundException
 import com.kobe.blogpress_api.services.fileStorage.FileStorageService
 import com.kobe.blogpress_api.services.user.UserService
 import jakarta.validation.Valid
+import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.toList
 import org.bson.types.ObjectId
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
@@ -329,12 +332,26 @@ class UserController(
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int
     ): ResponseEntity<ApiResponseDto<Page<UserDTO>>> {
+        val requestId = UUID.randomUUID().toString()
         val users = userService.searchUsers(query, page, size)
+        
+        // ⭐ Convertir les utilisateurs en DTOs avec les statistiques calculées
+        val userDTOs = users.content.asFlow()
+            .map { userService.toDTO(it) }
+            .toList()
+        
+        // Créer une nouvelle Page avec les DTOs
+        val pageDTOs = org.springframework.data.domain.PageImpl(
+            userDTOs,
+            users.pageable,
+            users.totalElements
+        )
+        
         return ResponseEntity.ok(
             ApiResponseDto.success(
-                data = users.map { userService.toDTO(it) },
+                data = pageDTOs,
                 message = "Users found",
-                requestId = UUID.randomUUID().toString()
+                requestId = requestId
             )
         )
     }
@@ -365,15 +382,29 @@ class UserController(
     @GetMapping("/me/statistics")
     suspend fun getMyStatistics(
         @AuthenticationPrincipal userId: String
-    ): ResponseEntity<ApiResponseDto<UserStatistics>> {
-        val user = userService.findById(ObjectId(userId))
-        return ResponseEntity.ok(
-            ApiResponseDto.success(
-                data = user.statistics,
-                message = "Statistics retrieved",
-                requestId = UUID.randomUUID().toString()
+    ): ResponseEntity<ApiResponseDto<com.kobe.blogpress_api.domain.model.user.UserStatistics>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] Get statistics for user: $userId")
+        
+        try {
+            // ⭐ Calculer les statistiques à la volée pour s'assurer qu'elles sont à jour
+            val statistics = userService.calculateUserStatistics(ObjectId(userId))
+            
+            return ResponseEntity.ok(
+                ApiResponseDto.success(
+                    data = statistics,
+                    message = "Statistiques récupérées avec succès",
+                    requestId = requestId
+                )
             )
-        )
+        } catch (e: Exception) {
+            logger.error("[$requestId] Error retrieving statistics for user: $userId", e)
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponseDto.error(
+                    message = "Erreur lors de la récupération des statistiques",
+                    requestId = requestId
+                ))
+        }
     }
 
     @PutMapping("/me/privacy")

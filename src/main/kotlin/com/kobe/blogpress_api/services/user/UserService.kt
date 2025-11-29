@@ -6,6 +6,8 @@ import com.kobe.blogpress_api.dto.user.PrivacyPreferencesDTO
 import com.kobe.blogpress_api.dto.user.UpdateProfileRequestDTO
 import com.kobe.blogpress_api.dto.user.UserDTO
 import com.kobe.blogpress_api.exception.ResourceNotFoundException
+import com.kobe.blogpress_api.repository.blog.BlogRepository
+import com.kobe.blogpress_api.repository.article.ArticleRepository
 import com.kobe.blogpress_api.repository.user.UserRepository
 import kotlinx.coroutines.reactor.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
@@ -18,7 +20,9 @@ import java.time.LocalDate
 
 @Service
 class UserService(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val blogRepository: BlogRepository,
+    private val articleRepository: ArticleRepository
 ) {
 
     suspend fun findById(userId: ObjectId): User {
@@ -209,8 +213,28 @@ class UserService(
          return userRepository.save(updatedUser).awaitSingle()
      }
 
+    // ⭐ NOUVEAU : Calculer les statistiques à la volée pour s'assurer qu'elles sont à jour
+    suspend fun calculateUserStatistics(userId: ObjectId): com.kobe.blogpress_api.domain.model.user.UserStatistics {
+        val totalBlogs = blogRepository.countByAuthorId(userId).awaitSingle()
+        val totalPosts = articleRepository.countByAuthorId(userId).awaitSingle()
+        
+        val user = findById(userId)
+        
+        // Utiliser les statistiques existantes pour les autres champs (followers, following, etc.)
+        // et mettre à jour totalBlogs et totalPosts
+        return user.statistics.copy(
+            totalBlogs = totalBlogs,
+            totalPosts = totalPosts,
+            followerCount = user.followers.size.toLong(),
+            followingCount = user.following.size.toLong()
+        )
+    }
+    
     // Ajoute cette méthode
-    fun toDTO(user: User): UserDTO {
+    suspend fun toDTO(user: User): UserDTO {
+        // ⭐ Calculer les statistiques à la volée pour s'assurer qu'elles sont à jour
+        val updatedStatistics = calculateUserStatistics(user.id)
+        
         return UserDTO(
             id = user.id.toHexString(),
             username = user.username,
@@ -233,7 +257,7 @@ class UserService(
             socialLinks = user.socialLinks,
             role = user.role,
             isEmailVerified = user.isEmailVerified,
-            statistics = user.statistics,
+            statistics = updatedStatistics, // ⭐ Utiliser les statistiques calculées
             createdAt = user.createdAt,
             lastLoginAt = user.lastLoginAt
         )
