@@ -29,7 +29,8 @@ class ArticleService(
     private val articleRepository: ArticleRepository,
     private val blogRepository: BlogRepository,
     private val articleSlugService: ArticleSlugService,
-    @Value("\${app.base-url:http://localhost:8090}") private val baseUrl: String
+    @Value("\${app.base-url:http://localhost:8090}") private val baseUrl: String,
+    @Value("\${app.frontend-url:http://localhost:3000}") private val frontendUrl: String
 ) {
 
     // ===== CRÉATION =====
@@ -159,6 +160,26 @@ class ArticleService(
         val blogSlug = if (article.blogId != null) {
             blogRepository.findById(article.blogId).awaitSingleOrNull()?.slug
         } else null
+        return toArticleResponse(article, blogSlug)
+    }
+    
+    // ⭐ NOUVEAU : Récupérer un article par son shareId
+    suspend fun getArticleByShareId(shareId: java.util.UUID, userId: ObjectId? = null): ArticleResponse {
+        val article = articleRepository.findByShareId(shareId).awaitSingleOrNull()
+            ?: throw ResourceNotFoundException("Article not found with shareId: $shareId")
+        
+        // Le créateur peut toujours voir son article, même s'il n'est pas publié
+        val isOwner = article.authorId == userId
+        
+        // Vérifications pour les utilisateurs non-propriétaires
+        if (!isOwner) {
+            checkArticleAccess(article, userId)
+        }
+        
+        val blogSlug = if (article.blogId != null) {
+            blogRepository.findById(article.blogId).awaitSingleOrNull()?.slug
+        } else null
+        
         return toArticleResponse(article, blogSlug)
     }
 
@@ -356,11 +377,25 @@ class ArticleService(
     }
 
     private suspend fun toArticleResponse(article: Article, blogSlug: String? = null): ArticleResponse {
+        // ⭐ MODIFIÉ : Utiliser shareId au lieu de slug pour les URLs publiques
         val publicUrl = when (article.type) {
-            ArticleType.SIMPLE_ARTICLE -> "$baseUrl/article/${article.slug}"
+            ArticleType.SIMPLE_ARTICLE -> "$frontendUrl/article/${article.shareId}"
             ArticleType.BLOG_POST -> {
-                val slug = blogSlug ?: blogRepository.findById(article.blogId!!).awaitSingleOrNull()?.slug
-                "$baseUrl/blog/$slug/post/${article.slug}"
+                // Récupérer le shareId du blog au lieu du slug
+                val blog = if (article.blogId != null) {
+                    blogRepository.findById(article.blogId).awaitSingleOrNull()
+                } else null
+                val blogShareId = blog?.shareId?.toString() ?: article.blogId?.toHexString()
+                "$frontendUrl/blog/$blogShareId/post/${article.shareId}"
+            }
+        }
+        
+        // Convertir les URLs d'images locales en URLs API
+        val coverImageUrl = article.coverImageUrl?.let { url ->
+            if (url.startsWith("/uploads/article-covers/") || url.contains("article-covers")) {
+                "/api/articles/${article.id.toHexString()}/cover-image"
+            } else {
+                url
             }
         }
 
@@ -370,7 +405,8 @@ class ArticleService(
             content = article.content,
             excerpt = article.excerpt,
             slug = article.slug,
-            coverImageUrl = article.coverImageUrl,
+            shareId = article.shareId.toString(), // ⭐ NOUVEAU
+            coverImageUrl = coverImageUrl,
             tags = article.tags,
             category = article.category,
             authorId = article.authorId.toHexString(),
@@ -391,13 +427,25 @@ class ArticleService(
     }
 
     private suspend fun toArticleSummaryDto(article: Article): ArticleSummaryDto {
+        // ⭐ MODIFIÉ : Utiliser shareId au lieu de slug pour les URLs publiques
         val publicUrl = when (article.type) {
-            ArticleType.SIMPLE_ARTICLE -> "$baseUrl/article/${article.slug}"
+            ArticleType.SIMPLE_ARTICLE -> "$frontendUrl/article/${article.shareId}"
             ArticleType.BLOG_POST -> {
-                val blogSlug = if (article.blogId != null) {
-                    blogRepository.findById(article.blogId).awaitSingleOrNull()?.slug
+                // Récupérer le shareId du blog au lieu du slug
+                val blog = if (article.blogId != null) {
+                    blogRepository.findById(article.blogId).awaitSingleOrNull()
                 } else null
-                "$baseUrl/blog/$blogSlug/post/${article.slug}"
+                val blogShareId = blog?.shareId?.toString() ?: article.blogId?.toHexString()
+                "$frontendUrl/blog/$blogShareId/post/${article.shareId}"
+            }
+        }
+        
+        // Convertir les URLs d'images locales en URLs API
+        val coverImageUrl = article.coverImageUrl?.let { url ->
+            if (url.startsWith("/uploads/article-covers/") || url.contains("article-covers")) {
+                "/api/articles/${article.id.toHexString()}/cover-image"
+            } else {
+                url
             }
         }
 
@@ -406,7 +454,8 @@ class ArticleService(
             title = article.title,
             excerpt = article.excerpt,
             slug = article.slug,
-            coverImageUrl = article.coverImageUrl,
+            shareId = article.shareId.toString(), // ⭐ NOUVEAU
+            coverImageUrl = coverImageUrl,
             tags = article.tags,
             category = article.category,
             authorId = article.authorId.toHexString(),

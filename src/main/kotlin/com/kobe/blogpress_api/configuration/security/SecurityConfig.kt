@@ -57,6 +57,7 @@ class SecurityConfig(
                     // Routes spécifiques pour les slugs et shareId (doivent être avant les routes générales)
                     .pathMatchers(HttpMethod.GET, "/api/blogs/slug/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/blogs/share/**").permitAll()
+                    .pathMatchers(HttpMethod.GET, "/api/articles/share/**").permitAll() // ⭐ NOUVEAU : Articles par shareId
                     .pathMatchers(HttpMethod.GET, "/api/blogs", "/api/blogs/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/articles", "/api/articles/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/posts", "/api/posts/**").permitAll()
@@ -77,6 +78,10 @@ class SecurityConfig(
                     .pathMatchers(HttpMethod.GET, "/api/blogs/*/logo-image").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/blogs/cover-images/**").permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/blogs/logo-images/**").permitAll()
+                    
+                    // Article Images ROUTES PUBLIQUES (cover)
+                    .pathMatchers(HttpMethod.GET, "/api/articles/*/cover-image").permitAll()
+                    .pathMatchers(HttpMethod.GET, "/api/articles/cover-images/**").permitAll()
 
 
                     // Recherche publique

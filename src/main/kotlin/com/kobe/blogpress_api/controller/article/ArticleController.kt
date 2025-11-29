@@ -69,6 +69,51 @@ class ArticleController(
             )
         )
     }
+    
+    // ⭐ NOUVEAU : Récupérer un article par son shareId
+    @GetMapping("/articles/share/{shareId}")
+    suspend fun getArticleByShareId(
+        @PathVariable shareId: String,
+        @AuthenticationPrincipal userId: String?
+    ): ResponseEntity<ApiResponseDto<ArticleResponse>> {
+        val requestId = UUID.randomUUID().toString()
+        val normalizedUserId = userId?.takeIf { it.isNotBlank() }
+        logger.info("[$requestId] Get article by shareId: $shareId, userId: $normalizedUserId")
+        
+        try {
+            val userObjectId = normalizedUserId?.let { ObjectId(it) }
+            val article = articleService.getArticleByShareId(java.util.UUID.fromString(shareId), userObjectId)
+            
+            return ResponseEntity.ok(
+                ApiResponseDto.success(
+                    data = article,
+                    message = "Article retrieved successfully",
+                    requestId = requestId
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            logger.warn("[$requestId] Invalid shareId format: $shareId")
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponseDto.error(
+                    message = "Format d'ID de partage invalide",
+                    requestId = requestId
+                ))
+        } catch (e: com.kobe.blogpress_api.exception.ResourceNotFoundException) {
+            logger.warn("[$requestId] Article not found with shareId: $shareId")
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponseDto.error(
+                    message = "Article non trouvé",
+                    requestId = requestId
+                ))
+        } catch (e: Exception) {
+            logger.error("[$requestId] Error retrieving article by shareId: $shareId", e)
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponseDto.error(
+                    message = "Erreur lors de la récupération de l'article",
+                    requestId = requestId
+                ))
+        }
+    }
 
     @GetMapping("/articles")
     suspend fun getPublishedSimpleArticles(

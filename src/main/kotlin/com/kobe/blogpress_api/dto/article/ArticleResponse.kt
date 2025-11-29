@@ -9,6 +9,7 @@ data class ArticleResponse(
     val content: String,
     val excerpt: String?,
     val slug: String,
+    val shareId: String, // ⭐ NOUVEAU : UUID pour le partage
     val coverImageUrl: String?,
     val tags: List<String>,
     val category: String?,
@@ -18,7 +19,7 @@ data class ArticleResponse(
     val isPublished: Boolean,
     val isPrivate: Boolean,
     val publishAt: Instant?,
-    val publicUrl: String,
+    val publicUrl: String, // ⚠️ MODIFIÉ : Utilise shareId au lieu de slug
     val createdAt: Instant,
     val updatedAt: Instant,
     val viewCount: Long,

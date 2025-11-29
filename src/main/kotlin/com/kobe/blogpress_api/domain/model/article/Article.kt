@@ -7,6 +7,7 @@ import org.springframework.data.mongodb.core.index.CompoundIndexes
 import org.springframework.data.mongodb.core.index.Indexed
 import org.springframework.data.mongodb.core.mapping.Document
 import java.time.Instant
+import java.util.UUID
 
 @Document(collection = "articles")
 @CompoundIndexes(
@@ -39,6 +40,9 @@ data class Article(
     val isPublished: Boolean = false,
     val isPrivate: Boolean = false,
     val publishAt: Instant? = null,
+
+    @Indexed(unique = true) // ⭐ NOUVEAU : UUID unique pour le partage
+    val shareId: UUID = UUID.randomUUID(), // ⭐ NOUVEAU : UUID unique pour le partage
 
     @Indexed
     val createdAt: Instant = Instant.now(),

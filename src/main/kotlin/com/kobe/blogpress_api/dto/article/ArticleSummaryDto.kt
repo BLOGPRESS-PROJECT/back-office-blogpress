@@ -9,6 +9,7 @@ data class ArticleSummaryDto(
     val title: String,
     val excerpt: String?,
     val slug: String,
+    val shareId: String, // ⭐ NOUVEAU : UUID pour le partage
     val coverImageUrl: String?,
     val tags: List<String>,
     val category: String?,
@@ -17,7 +18,7 @@ data class ArticleSummaryDto(
     val type: ArticleType,
     val isPublished: Boolean,
     val isPrivate: Boolean,
-    val publicUrl: String,
+    val publicUrl: String, // ⚠️ MODIFIÉ : Utilise shareId au lieu de slug
     val createdAt: Instant,
     val updatedAt: Instant,
     val readTime: Int,

@@ -83,4 +83,10 @@ interface ArticleRepository : ReactiveMongoRepository<Article, ObjectId> {
     fun countByAuthorId(authorId: ObjectId): Mono<Long>
 
     fun countByAuthorIdAndType(authorId: ObjectId, type: ArticleType): Mono<Long>
+    
+    // ⭐ NOUVEAU : Recherche par shareId
+    fun findByShareId(shareId: java.util.UUID): Mono<Article>
+    
+    // ⭐ NOUVEAU : Recherche par shareId et blogId (pour les BLOG_POST)
+    fun findByShareIdAndBlogId(shareId: java.util.UUID, blogId: ObjectId): Mono<Article>
 }
