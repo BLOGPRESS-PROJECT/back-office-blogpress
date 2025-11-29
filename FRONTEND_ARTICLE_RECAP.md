@@ -2,6 +2,26 @@
 
 ## 🎯 Changements Majeurs
 
+### ⚠️ **IMPORTANT - Changements de Mapping des Endpoints**
+
+**Les mappings des controllers ont été modifiés pour une meilleure organisation** :
+
+1. **`ArticleController`** :
+   - **Ancien mapping** : `@RequestMapping("/api")` avec endpoints `/articles/...`
+   - **Nouveau mapping** : `@RequestMapping("/api/articles")` avec endpoints directement `/...`
+   - **Résultat** : Les URLs finales restent identiques (`/api/articles/...`)
+
+2. **`ArticleImageController`** :
+   - **Ancien mapping** : `@RequestMapping("/api/articles")` avec endpoints `/{articleId}/cover-image`
+   - **Nouveau mapping** : `@RequestMapping("/api/articles/images")` avec endpoints `/{articleId}/cover-image`
+   - **Résultat** : Les URLs d'images changent de `/api/articles/{articleId}/cover-image` vers `/api/articles/images/{articleId}/cover-image`
+
+**⚠️ Action Requise** : Si vous utilisez les endpoints d'images de couverture, mettez à jour les URLs :
+- **Avant** : `/api/articles/{articleId}/cover-image`
+- **Après** : `/api/articles/images/{articleId}/cover-image`
+
+---
+
 ### 1. **URL Publique Stockée en Base de Données**
 
 **✅ Changement Important** : Les articles ont maintenant une **`publicUrl` stockée en base de données**, exactement comme les blogs. Cette URL est générée automatiquement lors de la création et utilise le `shareId` unique de l'article.

@@ -29,5 +29,6 @@ data class ArticleStats(
     val viewCount: Long,
     val likeCount: Long,
     val commentCount: Long,
-    val shareCount: Long
+    val shareCount: Long,
+    val favoriteCount: Long
 )

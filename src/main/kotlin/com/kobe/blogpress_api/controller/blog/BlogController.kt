@@ -275,6 +275,26 @@ class BlogController(
             )
         )
     }
+
+    @GetMapping("/favorites")
+    suspend fun getFavoriteBlogs(
+        @AuthenticationPrincipal userId: String,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int
+    ): ResponseEntity<ApiResponseDto<List<BlogSummaryDto>>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] Get favorite blogs for user: $userId - page=$page, size=$size")
+        
+        val blogs = blogService.getFavoriteBlogs(ObjectId(userId), page, size).toList()
+        
+        return ResponseEntity.ok(
+            ApiResponseDto.success(
+                data = blogs,
+                message = "Favorite blogs retrieved successfully",
+                requestId = requestId
+            )
+        )
+    }
     
     @PostMapping("/{blogId}/publish")
     suspend fun publishBlog(

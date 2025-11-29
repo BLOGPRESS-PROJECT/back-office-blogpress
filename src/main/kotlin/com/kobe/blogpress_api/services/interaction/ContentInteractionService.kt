@@ -133,14 +133,14 @@ class ContentInteractionService(
     private suspend fun incrementFavoriteCount(contentId: ObjectId, contentType: ContentType) {
         when (contentType) {
             ContentType.BLOG -> blogService.incrementFavoriteCount(contentId)
-            ContentType.ARTICLE -> {} // Articles n'ont pas de favoris pour l'instant
+            ContentType.ARTICLE -> articleService.incrementFavoriteCount(contentId)
         }
     }
 
     private suspend fun decrementFavoriteCount(contentId: ObjectId, contentType: ContentType) {
         when (contentType) {
             ContentType.BLOG -> blogService.decrementFavoriteCount(contentId)
-            ContentType.ARTICLE -> {} // Articles n'ont pas de favoris pour l'instant
+            ContentType.ARTICLE -> articleService.decrementFavoriteCount(contentId)
         }
     }
 }

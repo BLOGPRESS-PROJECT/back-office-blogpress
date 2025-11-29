@@ -40,6 +40,7 @@ class BlogService(
     private val mongoTemplate: ReactiveMongoTemplate,
     private val fileStorageService: FileStorageService,
     private val articleRepository: com.kobe.blogpress_api.repository.article.ArticleRepository,
+    private val favoriteRepository: com.kobe.blogpress_api.repository.interaction.FavoriteRepository,
     @Value("\${app.base-url:http://localhost:8090}") private val baseUrl: String,
     @Value("\${app.frontend-url:http://localhost:3000}") private val frontendUrl: String
 ) {
@@ -484,6 +485,29 @@ class BlogService(
     suspend fun getPublishedBlogs(page: Int, size: Int): Flow<BlogSummaryDto> {
         val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
         return blogRepository.findByIsPublishedAndIsPrivate(true, false, pageable).asFlow().map { toBlogSummaryDto(it) }
+    }
+
+    suspend fun getFavoriteBlogs(userId: ObjectId, page: Int, size: Int): Flow<BlogSummaryDto> {
+        val contentType = com.kobe.blogpress_api.domain.interaction.ContentType.BLOG
+        
+        // Récupérer les IDs des blogs favoris
+        val favoriteIds = favoriteRepository.findByUserIdAndContentType(userId, contentType)
+            .map { it.contentId }
+            .collectList()
+            .awaitSingle()
+        
+        if (favoriteIds.isEmpty()) {
+            return kotlinx.coroutines.flow.emptyFlow()
+        }
+        
+        // Récupérer les blogs correspondants
+        val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
+        val query = Query(Criteria.where("_id").`in`(favoriteIds))
+            .with(pageable)
+        
+        return mongoTemplate.find(query, Blog::class.java)
+            .asFlow()
+            .map { toBlogSummaryDto(it) }
     }
 
     // Incréments atomiques directement dans le service
