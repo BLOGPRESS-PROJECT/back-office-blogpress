@@ -1,5 +1,6 @@
 package com.kobe.blogpress_api.controller.blog
 
+import com.kobe.blogpress_api.dto.article.ArticleSummaryDto
 import com.kobe.blogpress_api.dto.blog.BlogGlobalStatsResponse
 import com.kobe.blogpress_api.dto.blog.BlogResponse
 import com.kobe.blogpress_api.dto.blog.BlogStats
@@ -24,7 +25,8 @@ import java.util.*
 @RequestMapping("/api/blogs")
 class BlogController(
     private val blogService: BlogService,
-    private val articleRepository: com.kobe.blogpress_api.repository.article.ArticleRepository
+    private val articleRepository: com.kobe.blogpress_api.repository.article.ArticleRepository,
+    private val articleService: com.kobe.blogpress_api.services.article.ArticleService
 ) {
 
     private val logger = LoggerFactory.getLogger(BlogController::class.java)
@@ -386,5 +388,30 @@ class BlogController(
     suspend fun getGlobalStats(): ResponseEntity<ApiResponseDto<BlogGlobalStatsResponse>> {
         val stats = blogService.getGlobalStats()
         return ResponseEntity.ok(ApiResponseDto.success(data = stats, message = "Global blog stats retrieved"))
+    }
+
+    @GetMapping("/{blogId}/posts")
+    suspend fun getBlogPosts(
+        @PathVariable blogId: String,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int
+    ): ResponseEntity<ApiResponseDto<Map<String, Any>>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] Get blog posts for blog: $blogId - page: $page, size: $size")
+
+        val articles = articleService.getBlogArticles(ObjectId(blogId), page, size).toList()
+
+        return ResponseEntity.ok(
+            ApiResponseDto.success(
+                data = mapOf(
+                    "posts" to articles,
+                    "total" to articles.size,
+                    "page" to page,
+                    "size" to size
+                ),
+                message = "Blog posts retrieved successfully",
+                requestId = requestId
+            )
+        )
     }
 }
