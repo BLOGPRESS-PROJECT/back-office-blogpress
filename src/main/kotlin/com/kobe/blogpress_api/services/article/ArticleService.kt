@@ -23,6 +23,7 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.util.UUID
 
 @Service
 class ArticleService(
@@ -50,6 +51,10 @@ class ArticleService(
             else -> request.isPublished
         }
 
+        // Générer l'URL publique (utiliser shareId pour garantir l'unicité)
+        val shareId = UUID.randomUUID()
+        val publicUrl = "$frontendUrl/article/$shareId"
+
         val article = Article(
             title = request.title,
             content = request.content,
@@ -64,6 +69,9 @@ class ArticleService(
             isPublished = shouldBePublished,
             isPrivate = request.isPrivate,
             publishAt = request.publishAt,
+            shareId = shareId,
+            publicUrl = publicUrl,
+            canonicalUrl = publicUrl, // Par défaut, l'URL publique est aussi l'URL canonique
             readTime = readTime
         )
 
@@ -98,6 +106,11 @@ class ArticleService(
             else -> request.isPublished
         }
 
+        // Générer l'URL publique (utiliser shareId pour garantir l'unicité)
+        val shareId = UUID.randomUUID()
+        val blogShareId = blog.shareId
+        val publicUrl = "$frontendUrl/blog/$blogShareId/post/$shareId"
+
         val article = Article(
             title = request.title,
             content = request.content,
@@ -112,6 +125,9 @@ class ArticleService(
             isPublished = shouldBePublished,
             isPrivate = request.isPrivate,
             publishAt = request.publishAt,
+            shareId = shareId,
+            publicUrl = publicUrl,
+            canonicalUrl = publicUrl, // Par défaut, l'URL publique est aussi l'URL canonique
             readTime = readTime
         )
 
@@ -121,7 +137,7 @@ class ArticleService(
         val updatedBlog = blog.copy(postCount = blog.postCount + 1)
         blogRepository.save(updatedBlog).awaitSingle()
 
-        return toArticleResponse(savedArticle, blog.slug)
+        return toArticleResponse(savedArticle)
     }
 
     // ===== LECTURE =====
@@ -132,11 +148,7 @@ class ArticleService(
 
         checkArticleAccess(article, userId)
 
-        val blogSlug = if (article.blogId != null) {
-            blogRepository.findById(article.blogId).awaitSingleOrNull()?.slug
-        } else null
-
-        return toArticleResponse(article, blogSlug)
+        return toArticleResponse(article)
     }
 
     suspend fun getBlogPostBySlug(
@@ -152,15 +164,12 @@ class ArticleService(
 
         checkArticleAccess(article, userId)
 
-        return toArticleResponse(article, blogSlug)
+        return toArticleResponse(article)
     }
 
     suspend fun getArticleById(articleId: ObjectId): ArticleResponse {
         val article = findById(articleId)
-        val blogSlug = if (article.blogId != null) {
-            blogRepository.findById(article.blogId).awaitSingleOrNull()?.slug
-        } else null
-        return toArticleResponse(article, blogSlug)
+        return toArticleResponse(article)
     }
     
     // ⭐ NOUVEAU : Récupérer un article par son shareId
@@ -176,11 +185,7 @@ class ArticleService(
             checkArticleAccess(article, userId)
         }
         
-        val blogSlug = if (article.blogId != null) {
-            blogRepository.findById(article.blogId).awaitSingleOrNull()?.slug
-        } else null
-        
-        return toArticleResponse(article, blogSlug)
+        return toArticleResponse(article)
     }
 
     suspend fun getUserArticles(authorId: ObjectId, type: ArticleType? = null): Flow<ArticleSummaryDto> {
@@ -260,6 +265,10 @@ class ArticleService(
             else -> article.isPublished
         }
 
+        // Recalculer l'URL publique avec le shareId (qui reste inchangé)
+        // Le shareId ne change jamais, donc l'URL publique reste la même
+        val newPublicUrl = article.publicUrl // Garder l'URL avec le shareId original
+
         val updatedArticle = article.copy(
             title = request.title ?: article.title,
             content = request.content ?: article.content,
@@ -271,17 +280,15 @@ class ArticleService(
             isPublished = finalIsPublished,
             isPrivate = request.isPrivate ?: article.isPrivate,
             publishAt = finalPublishAt,
+            publicUrl = newPublicUrl, // Garder l'URL publique (shareId ne change jamais)
+            canonicalUrl = newPublicUrl, // Mettre à jour l'URL canonique aussi
             readTime = newReadTime,
             updatedAt = Instant.now()
         )
 
         val savedArticle = articleRepository.save(updatedArticle).awaitSingle()
 
-        val blogSlug = if (savedArticle.blogId != null) {
-            blogRepository.findById(savedArticle.blogId).awaitSingleOrNull()?.slug
-        } else null
-
-        return toArticleResponse(savedArticle, blogSlug)
+        return toArticleResponse(savedArticle)
     }
 
     // ===== SUPPRESSION =====
@@ -376,20 +383,8 @@ class ArticleService(
         return maxOf(1, minOf(60, readTime))
     }
 
-    private suspend fun toArticleResponse(article: Article, blogSlug: String? = null): ArticleResponse {
-        // ⭐ MODIFIÉ : Utiliser shareId au lieu de slug pour les URLs publiques
-        val publicUrl = when (article.type) {
-            ArticleType.SIMPLE_ARTICLE -> "$frontendUrl/article/${article.shareId}"
-            ArticleType.BLOG_POST -> {
-                // Récupérer le shareId du blog au lieu du slug
-                val blog = if (article.blogId != null) {
-                    blogRepository.findById(article.blogId).awaitSingleOrNull()
-                } else null
-                val blogShareId = blog?.shareId?.toString() ?: article.blogId?.toHexString()
-                "$frontendUrl/blog/$blogShareId/post/${article.shareId}"
-            }
-        }
-        
+    private suspend fun toArticleResponse(article: Article): ArticleResponse {
+        // Utiliser l'URL publique stockée en base (comme pour les blogs)
         // Convertir les URLs d'images locales en URLs API
         val coverImageUrl = article.coverImageUrl?.let { url ->
             if (url.startsWith("/uploads/article-covers/") || url.contains("article-covers")) {
@@ -405,7 +400,7 @@ class ArticleService(
             content = article.content,
             excerpt = article.excerpt,
             slug = article.slug,
-            shareId = article.shareId.toString(), // ⭐ NOUVEAU
+            shareId = article.shareId.toString(),
             coverImageUrl = coverImageUrl,
             tags = article.tags,
             category = article.category,
@@ -415,7 +410,7 @@ class ArticleService(
             isPublished = article.isPublished,
             isPrivate = article.isPrivate,
             publishAt = article.publishAt,
-            publicUrl = publicUrl,
+            publicUrl = article.publicUrl, // Utiliser l'URL stockée en base
             createdAt = article.createdAt,
             updatedAt = article.updatedAt,
             viewCount = article.viewCount,
@@ -427,19 +422,7 @@ class ArticleService(
     }
 
     private suspend fun toArticleSummaryDto(article: Article): ArticleSummaryDto {
-        // ⭐ MODIFIÉ : Utiliser shareId au lieu de slug pour les URLs publiques
-        val publicUrl = when (article.type) {
-            ArticleType.SIMPLE_ARTICLE -> "$frontendUrl/article/${article.shareId}"
-            ArticleType.BLOG_POST -> {
-                // Récupérer le shareId du blog au lieu du slug
-                val blog = if (article.blogId != null) {
-                    blogRepository.findById(article.blogId).awaitSingleOrNull()
-                } else null
-                val blogShareId = blog?.shareId?.toString() ?: article.blogId?.toHexString()
-                "$frontendUrl/blog/$blogShareId/post/${article.shareId}"
-            }
-        }
-        
+        // Utiliser l'URL publique stockée en base (comme pour les blogs)
         // Convertir les URLs d'images locales en URLs API
         val coverImageUrl = article.coverImageUrl?.let { url ->
             if (url.startsWith("/uploads/article-covers/") || url.contains("article-covers")) {
@@ -454,7 +437,7 @@ class ArticleService(
             title = article.title,
             excerpt = article.excerpt,
             slug = article.slug,
-            shareId = article.shareId.toString(), // ⭐ NOUVEAU
+            shareId = article.shareId.toString(),
             coverImageUrl = coverImageUrl,
             tags = article.tags,
             category = article.category,
@@ -463,7 +446,7 @@ class ArticleService(
             type = article.type,
             isPublished = article.isPublished,
             isPrivate = article.isPrivate,
-            publicUrl = publicUrl,
+            publicUrl = article.publicUrl, // Utiliser l'URL stockée en base
             createdAt = article.createdAt,
             updatedAt = article.updatedAt,
             readTime = article.readTime,

@@ -44,6 +44,10 @@ data class Article(
     @Indexed(unique = true) // ⭐ NOUVEAU : UUID unique pour le partage
     val shareId: UUID = UUID.randomUUID(), // ⭐ NOUVEAU : UUID unique pour le partage
 
+    // URLs
+    val publicUrl: String, // URL publique complète de l'article (stockée en base)
+    val canonicalUrl: String? = null, // URL canonique pour le SEO (optionnel)
+
     @Indexed
     val createdAt: Instant = Instant.now(),
     val updatedAt: Instant = Instant.now(),
