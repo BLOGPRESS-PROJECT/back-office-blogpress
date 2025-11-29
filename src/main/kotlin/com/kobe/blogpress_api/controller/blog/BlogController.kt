@@ -10,6 +10,8 @@ import com.kobe.blogpress_api.dto.common.ApiResponseDto
 import com.kobe.blogpress_api.services.blog.BlogService
 import jakarta.validation.Valid
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.reactive.asFlow
+import kotlinx.coroutines.reactor.awaitSingle
 import org.bson.types.ObjectId
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -21,7 +23,8 @@ import java.util.*
 @RestController
 @RequestMapping("/api/blogs")
 class BlogController(
-    private val blogService: BlogService
+    private val blogService: BlogService,
+    private val articleRepository: com.kobe.blogpress_api.repository.article.ArticleRepository
 ) {
 
     private val logger = LoggerFactory.getLogger(BlogController::class.java)
@@ -55,11 +58,85 @@ class BlogController(
     suspend fun deleteBlog(
         @AuthenticationPrincipal userId: String,
         @PathVariable blogId: String
-    ): ResponseEntity<ApiResponseDto<Nothing>> {
+    ): ResponseEntity<ApiResponseDto<Map<String, Any>>> {
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] Delete blog request: $blogId by user: $userId")
-        blogService.deleteBlog(ObjectId(blogId), ObjectId(userId))
-        return ResponseEntity.ok(ApiResponseDto.success(data = null, message = "Blog deleted successfully", requestId = requestId)) as ResponseEntity<ApiResponseDto<Nothing>>
+        
+        try {
+            // Compter les articles avant suppression pour informer l'utilisateur
+            val articlesCount = articleRepository.findAllByBlogId(ObjectId(blogId)).asFlow().toList().size
+            
+            blogService.deleteBlog(ObjectId(blogId), ObjectId(userId))
+            
+            return ResponseEntity.ok(
+                ApiResponseDto.success(
+                    data = mapOf(
+                        "blogId" to blogId,
+                        "deletedArticlesCount" to articlesCount,
+                        "message" to "Blog and all associated articles deleted successfully"
+                    ),
+                    message = "Blog and all associated articles deleted successfully",
+                    requestId = requestId
+                )
+            ) as ResponseEntity<ApiResponseDto<Map<String, Any>>>
+        } catch (e: IllegalArgumentException) {
+            logger.warn("[$requestId] Unauthorized deletion attempt: $blogId by user: $userId")
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponseDto.error<Map<String, Any>>(
+                    message = e.message ?: "You are not authorized to delete this blog",
+                    requestId = requestId
+                ))
+        } catch (e: Exception) {
+            logger.error("[$requestId] Error deleting blog: $blogId", e)
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponseDto.error<Map<String, Any>>(
+                    message = "Error deleting blog: ${e.message}",
+                    requestId = requestId
+                ))
+        }
+    }
+    
+    // ⭐ NOUVEAU : Supprimer tous les articles d'un blog sans supprimer le blog
+    @DeleteMapping("/{blogId}/articles")
+    suspend fun deleteAllBlogArticles(
+        @AuthenticationPrincipal userId: String,
+        @PathVariable blogId: String
+    ): ResponseEntity<ApiResponseDto<Map<String, Any>>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] Delete all articles request for blog: $blogId by user: $userId")
+        
+        try {
+            // Compter les articles avant suppression
+            val articlesCount = articleRepository.findAllByBlogId(ObjectId(blogId)).asFlow().toList().size
+            
+            blogService.deleteAllBlogArticles(ObjectId(blogId), ObjectId(userId))
+            
+            return ResponseEntity.ok(
+                ApiResponseDto.success(
+                    data = mapOf(
+                        "blogId" to blogId,
+                        "deletedArticlesCount" to articlesCount,
+                        "message" to "All articles deleted successfully"
+                    ),
+                    message = "All articles deleted successfully",
+                    requestId = requestId
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            logger.warn("[$requestId] Unauthorized deletion attempt: $blogId by user: $userId")
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponseDto.error<Map<String, Any>>(
+                    message = e.message ?: "You are not authorized to delete articles from this blog",
+                    requestId = requestId
+                ))
+        } catch (e: Exception) {
+            logger.error("[$requestId] Error deleting articles for blog: $blogId", e)
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponseDto.error<Map<String, Any>>(
+                    message = "Error deleting articles: ${e.message}",
+                    requestId = requestId
+                ))
+        }
     }
 
     @GetMapping("/slug/{slug}")

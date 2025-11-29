@@ -89,4 +89,10 @@ interface ArticleRepository : ReactiveMongoRepository<Article, ObjectId> {
     
     // ⭐ NOUVEAU : Recherche par shareId et blogId (pour les BLOG_POST)
     fun findByShareIdAndBlogId(shareId: java.util.UUID, blogId: ObjectId): Mono<Article>
+    
+    // ⭐ NOUVEAU : Supprimer tous les articles d'un blog
+    fun deleteByBlogId(blogId: ObjectId): Mono<Void>
+    
+    // ⭐ NOUVEAU : Récupérer tous les articles d'un blog (sans pagination)
+    fun findAllByBlogId(blogId: ObjectId): Flux<Article>
 }

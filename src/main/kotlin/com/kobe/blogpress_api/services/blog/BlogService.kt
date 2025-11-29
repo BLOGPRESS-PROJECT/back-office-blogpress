@@ -39,6 +39,7 @@ class BlogService(
     private val blogSlugService: BlogSlugService,
     private val mongoTemplate: ReactiveMongoTemplate,
     private val fileStorageService: FileStorageService,
+    private val articleRepository: com.kobe.blogpress_api.repository.article.ArticleRepository,
     @Value("\${app.base-url:http://localhost:8090}") private val baseUrl: String,
     @Value("\${app.frontend-url:http://localhost:3000}") private val frontendUrl: String
 ) {
@@ -153,11 +154,43 @@ class BlogService(
 
     suspend fun deleteBlog(blogId: ObjectId, authorId: ObjectId) {
         val blog = findById(blogId)
+        
+        // Vérifier que l'utilisateur est le propriétaire du blog
         if (blog.authorId != authorId) {
-            error("You are not authorized to delete this blog")
+            throw IllegalArgumentException("You are not authorized to delete this blog")
         }
         
-        // Supprimer les images associées au blog
+        logger.info("Starting deletion of blog: ${blogId.toHexString()} and all associated articles")
+        
+        // 1. Supprimer tous les articles associés au blog
+        try {
+            val articles = articleRepository.findAllByBlogId(blogId).collectList().awaitSingle()
+            logger.info("Found ${articles.size} articles to delete for blog: ${blogId.toHexString()}")
+            
+            // Supprimer les images de couverture de tous les articles
+            articles.forEach { article ->
+                try {
+                    if (!article.coverImageUrl.isNullOrBlank() && fileStorageService.isLocalFile(article.coverImageUrl)) {
+                        fileStorageService.deleteArticleCoverImage(article.coverImageUrl)
+                        logger.debug("Article cover image deleted: ${article.id.toHexString()}")
+                    }
+                } catch (e: Exception) {
+                    logger.warn("Error deleting cover image for article ${article.id.toHexString()}: ${e.message}", e)
+                    // Continuer même si la suppression d'une image échoue
+                }
+            }
+            
+            // Supprimer tous les articles de la base de données
+            if (articles.isNotEmpty()) {
+                articleRepository.deleteByBlogId(blogId).awaitSingleOrNull()
+                logger.info("Deleted ${articles.size} articles for blog: ${blogId.toHexString()}")
+            }
+        } catch (e: Exception) {
+            logger.error("Error deleting articles for blog ${blogId.toHexString()}: ${e.message}", e)
+            throw RuntimeException("Failed to delete articles for blog: ${e.message}", e)
+        }
+        
+        // 2. Supprimer les images associées au blog
         try {
             // Supprimer l'image de couverture si elle existe et est un fichier local
             if (!blog.coverImageUrl.isNullOrBlank() && fileStorageService.isLocalFile(blog.coverImageUrl)) {
@@ -175,9 +208,61 @@ class BlogService(
             // Continuer la suppression du blog même si la suppression des images échoue
         }
         
-        // Supprimer le blog de la base de données
-        blogRepository.delete(blog).awaitSingleOrNull()
-        logger.info("Blog deleted successfully: ${blogId.toHexString()}")
+        // 3. Supprimer le blog de la base de données
+        try {
+            blogRepository.delete(blog).awaitSingleOrNull()
+            logger.info("Blog deleted successfully: ${blogId.toHexString()}")
+        } catch (e: Exception) {
+            logger.error("Error deleting blog ${blogId.toHexString()}: ${e.message}", e)
+            throw RuntimeException("Failed to delete blog: ${e.message}", e)
+        }
+    }
+    
+    /**
+     * Supprimer tous les articles d'un blog sans supprimer le blog lui-même
+     * Utile pour réinitialiser un blog ou nettoyer les articles
+     */
+    suspend fun deleteAllBlogArticles(blogId: ObjectId, authorId: ObjectId) {
+        val blog = findById(blogId)
+        
+        // Vérifier que l'utilisateur est le propriétaire du blog
+        if (blog.authorId != authorId) {
+            throw IllegalArgumentException("You are not authorized to delete articles from this blog")
+        }
+        
+        logger.info("Starting deletion of all articles for blog: ${blogId.toHexString()}")
+        
+        try {
+            val articles = articleRepository.findAllByBlogId(blogId).collectList().awaitSingle()
+            logger.info("Found ${articles.size} articles to delete for blog: ${blogId.toHexString()}")
+            
+            // Supprimer les images de couverture de tous les articles
+            articles.forEach { article ->
+                try {
+                    if (!article.coverImageUrl.isNullOrBlank() && fileStorageService.isLocalFile(article.coverImageUrl)) {
+                        fileStorageService.deleteArticleCoverImage(article.coverImageUrl)
+                        logger.debug("Article cover image deleted: ${article.id.toHexString()}")
+                    }
+                } catch (e: Exception) {
+                    logger.warn("Error deleting cover image for article ${article.id.toHexString()}: ${e.message}", e)
+                }
+            }
+            
+            // Supprimer tous les articles de la base de données
+            if (articles.isNotEmpty()) {
+                articleRepository.deleteByBlogId(blogId).awaitSingleOrNull()
+                logger.info("Deleted ${articles.size} articles for blog: ${blogId.toHexString()}")
+            }
+            
+            // Réinitialiser le compteur d'articles du blog
+            val updatedBlog = blog.copy(postCount = 0)
+            blogRepository.save(updatedBlog).awaitSingle()
+            logger.info("Blog post count reset to 0 for blog: ${blogId.toHexString()}")
+            
+        } catch (e: Exception) {
+            logger.error("Error deleting articles for blog ${blogId.toHexString()}: ${e.message}", e)
+            throw RuntimeException("Failed to delete articles: ${e.message}", e)
+        }
     }
 
     suspend fun getBlogBySlug(slug: String, userId: ObjectId? = null): BlogResponse {
