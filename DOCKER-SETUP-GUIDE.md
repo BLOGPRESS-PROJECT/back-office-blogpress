@@ -292,3 +292,39 @@ cd setup-db && docker compose up -d
 2. Configurer les domaines dans les fichiers de config Nginx
 3. Optimiser les performances (cache, compression, etc.)
 
+## 🤖 Automatisation du déploiement (CI/CD) – Plan à suivre
+
+> Ce plan sera finalisé lorsque la configuration du frontend (`setup-frontend`) et du proxy/SSL sera disponible.
+
+1. **Choisir et configurer le registre d’images Docker**
+   - Option recommandée : **GitHub Container Registry** ou **Docker Hub**.
+   - Créer un repository d’image pour `blogpress-api` (et plus tard pour `blogpress-frontend`).
+   - Générer un token d’accès et le stocker dans les *secrets* du dépôt (`REGISTRY_USER`, `REGISTRY_TOKEN`).
+
+2. **Mettre en place un pipeline CI (GitHub Actions recommandé)**
+   - Workflow `api-ci.yml` déclenché sur `push`/`merge` vers `main` :
+     - `./gradlew clean test` puis `./gradlew bootJar`.
+     - `docker build` en utilisant `setup-api/Dockerfile`.
+     - `docker push` vers le registre (`latest` + tag basé sur le commit SHA).
+
+3. **Mettre en place le déploiement automatique (CD) sur le serveur**
+   - Sur le serveur (VPS ou autre) : cloner ce repo dans `/opt/blogpress-api` avec `compose.yaml` et les dossiers `setup-*`.
+   - Ajouter un job `deploy` dans le workflow qui :
+     - Se connecte au serveur (ex. via **SSH** avec un secret `SSH_KEY`).
+     - Fait `docker login` au registre.
+     - Exécute `docker compose pull` puis `docker compose up -d` pour appliquer la nouvelle image.
+
+4. **Intégrer le frontend et le proxy Nginx**
+   - Quand `setup-frontend` sera prêt :
+     - Ajouter la construction et le push de l’image `blogpress-frontend` dans le même pipeline.
+     - Mettre à jour `setup-proxy` pour pointer vers les hôtes `blogpress-api` et `blogpress-frontend` (déjà préparé).
+   - Ajouter une étape de **vérification automatique** après déploiement (curl sur `ngrok`/domaine final, vérification `/actuator/health`, etc.).
+
+5. **Gestion des secrets et de la configuration prod**
+   - Centraliser les valeurs sensibles dans les variables d’environnement du serveur (fichier `.env` non commité).
+   - S’assurer que `application-prod.properties` reste **ignoré par Git** (cf. `.gitignore`) et n’est utilisé qu’en production.
+
+> Lors de la mise à disposition de la configuration frontend et des domaines définitifs, ce chapitre sera complété avec :  
+> – Les workflows CI/CD complets (fichiers `.github/workflows/*.yml`)  
+> – Les exemples de configuration SSL (Certbot + Nginx) adaptés à tes domaines/ngrok.
+
