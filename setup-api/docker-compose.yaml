@@ -19,7 +19,7 @@ services:
     # Variables d'environnement
     environment:
       # Spring
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILE:-docker}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILE:-prod}
 
       # URLs
       APP_BASE_URL: ${APP_BASE_URL}

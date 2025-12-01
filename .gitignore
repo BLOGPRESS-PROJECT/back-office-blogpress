@@ -38,3 +38,8 @@ out/
 
 ### Kotlin ###
 .kotlin
+
+### Sensitive Configuration Files ###
+# Fichiers de configuration production (ne pas commiter)
+src/main/resources/application-prod.properties
+*.prod.properties

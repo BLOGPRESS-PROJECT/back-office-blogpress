@@ -34,7 +34,7 @@ services:
     ports:
       - "${API_PORT:-8090}:8090"
     environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILE:-docker}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILE:-prod}
       SPRING_DATA_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-qwerty87}@mongodb:27017/${MONGO_DATABASE:-blogpress}?authSource=admin
       JWT_SECRET: ${JWT_SECRET}
       JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION:-3600000}
