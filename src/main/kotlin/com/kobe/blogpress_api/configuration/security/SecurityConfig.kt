@@ -30,8 +30,8 @@ class SecurityConfig(
     private val jwtServerSecurityContextRepository: JwtServerSecurityContextRepository,
 
     // ✅ Injecter les URLs configurables
-    @Value("\${app.frontend-url}") private val frontendUrl: String,
-    @Value("\${app.allowed-origins:http://localhost:3000}") private val allowedOrigins: String
+    @Value("\${app.frontend-url:}") private val frontendUrl: String,
+    @Value("\${app.allowed-origins:http://localhost:3000,http://localhost:5174}") private val allowedOrigins: String
 ) {
 
     @Bean
@@ -135,7 +135,8 @@ class SecurityConfig(
 
                     // Article management
                     .pathMatchers(HttpMethod.POST, "/api/articles").authenticated()
-                    .pathMatchers(HttpMethod.POST, "/api/blogs/*/posts").authenticated()
+                    // ✅ Création d'un article de blog (aligné avec ArticleController)
+                    .pathMatchers(HttpMethod.POST, "/api/articles/blogs/*/posts").authenticated()
                     .pathMatchers(HttpMethod.PUT, "/api/articles/**").authenticated()
                     .pathMatchers(HttpMethod.DELETE, "/api/articles/**").authenticated()
                     .pathMatchers(HttpMethod.GET, "/api/articles/user").authenticated()
@@ -156,14 +157,23 @@ class SecurityConfig(
     @Bean
     fun corsConfigurationSource(): CorsConfigurationSource {
         // ✅ Parser les origins depuis la propriété (séparés par des virgules)
-        val origins = allowedOrigins.split(",").map { it.trim() }
+        val originsFromConfig = allowedOrigins
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toMutableSet()
 
-        println("🌐 CORS - Allowed Origins: $origins")
+        // ✅ Ajouter l'URL frontend explicite si définie
+        if (frontendUrl.isNotBlank()) {
+            originsFromConfig.add(frontendUrl.trim())
+        }
+
+        println("🌐 CORS - Allowed Origins: $originsFromConfig")
         println("🌐 CORS - Frontend URL: $frontendUrl")
 
         val configuration = CorsConfiguration().apply {
-            // ✅ Utiliser les origins configurés
-            allowedOrigins = origins
+            // ✅ Utiliser les origins configurés (+ frontendUrl)
+            allowedOrigins = originsFromConfig.toList()
 
             allowedMethods = listOf("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
             allowedHeaders = listOf("*")
