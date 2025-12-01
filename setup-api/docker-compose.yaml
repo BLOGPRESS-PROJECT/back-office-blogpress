@@ -67,6 +67,9 @@ services:
     networks:
       - blogpress-network
 
+    # Note: MongoDB doit être démarré avant (via setup-db)
+    # Le réseau blogpress-network doit exister (créé par setup-db)
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8090/actuator/health"]
       interval: 30s

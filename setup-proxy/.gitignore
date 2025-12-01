@@ -1,4 +1,4 @@
-gitignore# Environment files
+# Environment files
 .env
 .env.local
 .env.prod
@@ -10,6 +10,13 @@ logs/
 # SSL certificates (ne pas commiter)
 certs/
 ssl/
+*.pem
+*.key
+*.crt
 
 # Nginx cache
 cache/
+temp/
+
+# Let's Encrypt certificates
+letsencrypt/
