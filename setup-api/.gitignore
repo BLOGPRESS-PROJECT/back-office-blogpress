@@ -1,0 +1,21 @@
+# Environment files
+.env
+.env.local
+.env.prod
+
+# Logs
+logs/
+*.log
+
+# Docker volumes data (ne pas commiter)
+data/
+uploads/
+
+# Build artifacts
+*.jar
+build/
+
+# Temporary files
+*.tmp
+*.temp
+
