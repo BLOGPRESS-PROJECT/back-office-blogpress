@@ -87,6 +87,9 @@ class SecurityConfig(
                     // Recherche publique
                     .pathMatchers(HttpMethod.GET, "/api/search", "/api/search/**").permitAll()
 
+                    // Feed public (authentification optionnelle)
+                    .pathMatchers(HttpMethod.GET, "/api/feed", "/api/feed/**").permitAll()
+
                     // Interactions publiques (views, shares)
                     // ⭐ IMPORTANT : Routes pour /api/interactions/view et /api/interactions/share
                     .pathMatchers(HttpMethod.POST, "/api/interactions/view").permitAll()

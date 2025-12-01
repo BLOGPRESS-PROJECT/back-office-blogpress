@@ -1,5 +1,6 @@
-package com.kobe.blogpress_api.controller.article
+package com.kobe.blogpress_api.controller.images
 
+import com.kobe.blogpress_api.dto.article.UpdateArticleRequest
 import com.kobe.blogpress_api.dto.common.ApiResponseDto
 import com.kobe.blogpress_api.services.article.ArticleService
 import com.kobe.blogpress_api.services.fileStorage.ArticleImageService
@@ -14,9 +15,15 @@ import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.http.codec.multipart.FilePart
 import org.springframework.security.core.annotation.AuthenticationPrincipal
-import org.springframework.web.bind.annotation.*
+import org.springframework.web.bind.annotation.DeleteMapping
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestPart
+import org.springframework.web.bind.annotation.RestController
 import java.nio.file.Files
-import java.util.*
+import java.util.UUID
 
 @RestController
 @RequestMapping("/api/articles/images")
@@ -27,7 +34,7 @@ class ArticleImageController(
 ) {
 
     private val logger = LoggerFactory.getLogger(ArticleImageController::class.java)
-    
+
     // ⭐ NOUVEAU : Servir l'image de couverture d'un article
     @GetMapping("/{articleId}/cover-image")
     suspend fun getArticleCoverImage(
@@ -90,13 +97,13 @@ class ArticleImageController(
         // Mettre à jour l'article
         val updatedArticle = articleService.updateArticle(
             ObjectId(articleId),
-            com.kobe.blogpress_api.dto.article.UpdateArticleRequest(coverImageUrl = imageUrl),
+            UpdateArticleRequest(coverImageUrl = imageUrl),
             ObjectId(userId)
         )
 
         logger.info("[$requestId] Article cover image uploaded successfully: $imageUrl")
         return ResponseEntity.ok(
-            ApiResponseDto.success(
+            ApiResponseDto.Companion.success(
                 data = mapOf(
                     "coverImageUrl" to imageUrl,
                     "articleId" to articleId
@@ -126,13 +133,13 @@ class ArticleImageController(
 
         articleService.updateArticle(
             ObjectId(articleId),
-            com.kobe.blogpress_api.dto.article.UpdateArticleRequest(coverImageUrl = ""),
+            UpdateArticleRequest(coverImageUrl = ""),
             ObjectId(userId)
         )
 
         logger.info("[$requestId] Article cover image deleted successfully")
         return ResponseEntity.ok(
-            ApiResponseDto.success(
+            ApiResponseDto.Companion.success(
                 data = null,
                 message = "Article cover image deleted successfully",
                 requestId = requestId
