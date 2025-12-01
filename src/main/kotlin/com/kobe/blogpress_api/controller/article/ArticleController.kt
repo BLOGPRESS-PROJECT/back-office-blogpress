@@ -202,6 +202,61 @@ class ArticleController(
 
     // ===== GESTION COMMUNE =====
 
+    /**
+     * ⚠️ Compatibilité ascendante :
+     * GET /api/articles/{articleId} pour les anciens appels frontend qui utilisaient l'id MongoDB.
+     * Pour les nouveaux flux publics, il est recommandé d'utiliser GET /api/articles/share/{shareId}.
+     */
+    @GetMapping("/{articleId}")
+    suspend fun getArticleById(
+        @PathVariable articleId: String,
+        @AuthenticationPrincipal userId: String?
+    ): ResponseEntity<ApiResponseDto<ArticleResponse>> {
+        val requestId = UUID.randomUUID().toString()
+        val normalizedUserId = userId?.takeIf { it.isNotBlank() }
+        logger.info("[$requestId] Get article by id: $articleId, userId: $normalizedUserId")
+
+        return try {
+            val articleObjectId = ObjectId(articleId)
+            val article = articleService.getArticleById(articleObjectId)
+
+            ResponseEntity.ok(
+                ApiResponseDto.success(
+                    data = article,
+                    message = "Article retrieved successfully",
+                    requestId = requestId
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            logger.warn("[$requestId] Invalid articleId format: $articleId")
+            ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(
+                    ApiResponseDto.error(
+                        message = "Format d'identifiant d'article invalide",
+                        requestId = requestId
+                    )
+                )
+        } catch (e: com.kobe.blogpress_api.exception.ResourceNotFoundException) {
+            logger.warn("[$requestId] Article not found with id: $articleId")
+            ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(
+                    ApiResponseDto.error(
+                        message = "Article non trouvé",
+                        requestId = requestId
+                    )
+                )
+        } catch (e: Exception) {
+            logger.error("[$requestId] Error retrieving article by id: $articleId", e)
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(
+                    ApiResponseDto.error(
+                        message = "Erreur lors de la récupération de l'article",
+                        requestId = requestId
+                    )
+                )
+        }
+    }
+
     @GetMapping("/user")
     suspend fun getUserArticles(
         @AuthenticationPrincipal userId: String,
