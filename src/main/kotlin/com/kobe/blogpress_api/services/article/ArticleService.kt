@@ -422,14 +422,17 @@ class ArticleService(
     }
 
     private suspend fun toArticleResponse(article: Article): ArticleResponse {
-        // Utiliser l'URL publique stockée en base (comme pour les blogs)
-        // Convertir les URLs d'images locales en URLs API
-        val coverImageUrl = article.coverImageUrl?.let { url ->
-            if (url.startsWith("/uploads/article-covers/") || url.contains("article-covers")) {
-                "/api/articles/images/${article.id.toHexString()}/cover-image"
+        // Construire l'URL complète de l'image de couverture
+        val coverImageUrl: String? = if (article.coverImageUrl != null && article.coverImageUrl.isNotBlank()) {
+            if (article.coverImageUrl.startsWith("http://") || article.coverImageUrl.startsWith("https://")) {
+                // URL externe complète, l'utiliser telle quelle
+                article.coverImageUrl
             } else {
-                url
+                // Chemin relatif ou nom de fichier, construire l'URL complète
+                "$baseUrl/api/articles/images/${article.id.toHexString()}/cover-image"
             }
+        } else {
+            null
         }
 
         return ArticleResponse(
@@ -461,14 +464,17 @@ class ArticleService(
     }
 
     private suspend fun toArticleSummaryDto(article: Article): ArticleSummaryDto {
-        // Utiliser l'URL publique stockée en base (comme pour les blogs)
-        // Convertir les URLs d'images locales en URLs API
-        val coverImageUrl = article.coverImageUrl?.let { url ->
-            if (url.startsWith("/uploads/article-covers/") || url.contains("article-covers")) {
-                "/api/articles/images/${article.id.toHexString()}/cover-image"
+        // Construire l'URL complète de l'image de couverture
+        val coverImageUrl: String? = if (article.coverImageUrl != null && article.coverImageUrl.isNotBlank()) {
+            if (article.coverImageUrl.startsWith("http://") || article.coverImageUrl.startsWith("https://")) {
+                // URL externe complète, l'utiliser telle quelle
+                article.coverImageUrl
             } else {
-                url
+                // Chemin relatif ou nom de fichier, construire l'URL complète
+                "$baseUrl/api/articles/images/${article.id.toHexString()}/cover-image"
             }
+        } else {
+            null
         }
 
         return ArticleSummaryDto(

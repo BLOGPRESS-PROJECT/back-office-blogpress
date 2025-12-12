@@ -15,5 +15,3 @@ data class FeedResponse(
     val isLast: Boolean // Est-ce la dernière page ?
 )
 
-
-

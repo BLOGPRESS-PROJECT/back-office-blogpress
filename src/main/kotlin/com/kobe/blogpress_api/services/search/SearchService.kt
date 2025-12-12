@@ -134,7 +134,7 @@ class SearchService(
                 title = blog.title,
                 excerpt = blog.description,
                 slug = blog.slug,
-                coverImageUrl = blog.coverImageUrl,
+                coverImageUrl = buildBlogCoverImageUrl(blog),
                 publicUrl = "$baseUrl/blog/${blog.slug}",
                 authorId = blog.authorId.toHexString(),
                 createdAt = blog.createdAt,
@@ -204,7 +204,7 @@ class SearchService(
                 title = article.title,
                 excerpt = article.excerpt,
                 slug = article.slug,
-                coverImageUrl = article.coverImageUrl,
+                coverImageUrl = buildArticleCoverImageUrl(article),
                 publicUrl = publicUrl,
                 authorId = article.authorId.toHexString(),
                 createdAt = article.createdAt,
@@ -323,7 +323,7 @@ class SearchService(
                 title = blog.title,
                 excerpt = blog.description,
                 slug = blog.slug,
-                coverImageUrl = blog.coverImageUrl,
+                coverImageUrl = buildBlogCoverImageUrl(blog),
                 publicUrl = "$baseUrl/blog/${blog.slug}",
                 authorId = blog.authorId.toHexString(),
                 createdAt = blog.createdAt,
@@ -404,7 +404,7 @@ class SearchService(
                 title = article.title,
                 excerpt = article.excerpt,
                 slug = article.slug,
-                coverImageUrl = article.coverImageUrl,
+                coverImageUrl = buildArticleCoverImageUrl(article),
                 publicUrl = publicUrl,
                 authorId = article.authorId.toHexString(),
                 createdAt = article.createdAt,
@@ -524,6 +524,40 @@ class SearchService(
         score += matchPercentage * 30.0
 
         return score
+    }
+
+    /**
+     * Construire l'URL complète de l'image de couverture d'un article
+     */
+    private fun buildArticleCoverImageUrl(article: Article): String? {
+        return if (article.coverImageUrl != null && article.coverImageUrl.isNotBlank()) {
+            if (article.coverImageUrl.startsWith("http://") || article.coverImageUrl.startsWith("https://")) {
+                // URL externe complète, l'utiliser telle quelle
+                article.coverImageUrl
+            } else {
+                // Chemin relatif ou nom de fichier, construire l'URL complète
+                "$baseUrl/api/articles/images/${article.id.toHexString()}/cover-image"
+            }
+        } else {
+            null
+        }
+    }
+
+    /**
+     * Construire l'URL complète de l'image de couverture d'un blog
+     */
+    private fun buildBlogCoverImageUrl(blog: Blog): String? {
+        return if (blog.coverImageUrl != null && blog.coverImageUrl.isNotBlank()) {
+            if (blog.coverImageUrl.startsWith("http://") || blog.coverImageUrl.startsWith("https://")) {
+                // URL externe complète, l'utiliser telle quelle
+                blog.coverImageUrl
+            } else {
+                // Chemin relatif ou nom de fichier, construire l'URL complète
+                "$baseUrl/api/blogs/${blog.id.toHexString()}/cover-image"
+            }
+        } else {
+            null
+        }
     }
 
     /**

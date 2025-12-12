@@ -58,6 +58,3 @@ data class FeedItemDto(
     val isPublished: Boolean,    // Article publié ?
     val isPrivate: Boolean       // Article privé ?
 )
-
-
-

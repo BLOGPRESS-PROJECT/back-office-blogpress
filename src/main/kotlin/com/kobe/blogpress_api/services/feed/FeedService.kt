@@ -40,7 +40,8 @@ class FeedService(
     private val likeRepository: LikeRepository,
     private val favoriteRepository: FavoriteRepository,
     private val mongoTemplate: ReactiveMongoTemplate,
-    @Value("\${app.frontend-url:http://localhost:3000}") private val frontendUrl: String
+    @Value("\${app.frontend-url:http://localhost:3000}") private val frontendUrl: String,
+    @Value("\${app.base-url:http://localhost:8090}") private val baseUrl: String
 ) {
 
     private val logger = LoggerFactory.getLogger(FeedService::class.java)
@@ -220,6 +221,21 @@ class FeedService(
         // Construire l'excerpt si manquant
         val excerpt = article.excerpt ?: extractExcerpt(article.content)
 
+        // Construire l'URL complète de l'image de couverture
+        val coverImageUrl: String? = if (article.coverImageUrl != null && article.coverImageUrl.isNotBlank()) {
+            // Vérifier si c'est déjà une URL complète (externe)
+            if (article.coverImageUrl.startsWith("http://") || article.coverImageUrl.startsWith("https://")) {
+                // C'est déjà une URL complète (externe), l'utiliser telle quelle
+                article.coverImageUrl
+            } else {
+                // C'est un chemin relatif ou un nom de fichier, construire l'URL complète
+                // Utiliser l'endpoint API pour les images d'articles
+                "$baseUrl/api/articles/images/${article.id.toHexString()}/cover-image"
+            }
+        } else {
+            null
+        }
+
         FeedItemDto(
             id = article.id.toHexString(),
             blogId = article.blogId?.toHexString(),
@@ -228,7 +244,7 @@ class FeedService(
             publicUrl = article.publicUrl,
             title = article.title,
             excerpt = excerpt,
-            coverImageUrl = article.coverImageUrl,
+            coverImageUrl = coverImageUrl,
             createdAt = LocalDateTime.ofInstant(article.createdAt, ZoneId.systemDefault()),
             url = url,
             authorName = author.fullName,

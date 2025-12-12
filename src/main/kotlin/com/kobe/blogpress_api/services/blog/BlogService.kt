@@ -563,14 +563,42 @@ class BlogService(
     }
 
     private fun toBlogResponse(blog: Blog): BlogResponse {
+        val blogId = blog.id.toHexString()
+        
+        // Construire l'URL complète de l'image de couverture
+        val coverImageUrl: String? = if (blog.coverImageUrl != null && blog.coverImageUrl.isNotBlank()) {
+            if (blog.coverImageUrl.startsWith("http://") || blog.coverImageUrl.startsWith("https://")) {
+                // URL externe complète, l'utiliser telle quelle
+                blog.coverImageUrl
+            } else {
+                // Chemin relatif ou nom de fichier, construire l'URL complète
+                "$baseUrl/api/blogs/$blogId/cover-image"
+            }
+        } else {
+            null
+        }
+        
+        // Construire l'URL complète du logo
+        val logoImageUrl: String? = if (blog.logoImageUrl != null && blog.logoImageUrl.isNotBlank()) {
+            if (blog.logoImageUrl.startsWith("http://") || blog.logoImageUrl.startsWith("https://")) {
+                // URL externe complète, l'utiliser telle quelle
+                blog.logoImageUrl
+            } else {
+                // Chemin relatif ou nom de fichier, construire l'URL complète
+                "$baseUrl/api/blogs/$blogId/logo-image"
+            }
+        } else {
+            null
+        }
+        
         return BlogResponse(
-            id = blog.id.toHexString(),
+            id = blogId,
             title = blog.title,
             description = blog.description,
             slug = blog.slug,
             shareId = blog.shareId,
-            logoImageUrl = blog.logoImageUrl,
-            coverImageUrl = blog.coverImageUrl,
+            logoImageUrl = logoImageUrl,   // ⭐ URL complète
+            coverImageUrl = coverImageUrl, // ⭐ URL complète
             tags = blog.tags,
             authorId = blog.authorId.toHexString(),
             isPublished = blog.isPublished,
@@ -589,29 +617,41 @@ class BlogService(
 
     private fun toBlogSummaryDto(blog: Blog): BlogSummaryDto {
         val blogId = blog.id.toHexString()
+        
+        // Construire l'URL complète de l'image de couverture
+        val coverImageUrl: String? = if (blog.coverImageUrl != null && blog.coverImageUrl.isNotBlank()) {
+            if (blog.coverImageUrl.startsWith("http://") || blog.coverImageUrl.startsWith("https://")) {
+                // URL externe complète, l'utiliser telle quelle
+                blog.coverImageUrl
+            } else {
+                // Chemin relatif ou nom de fichier, construire l'URL complète
+                "$baseUrl/api/blogs/$blogId/cover-image"
+            }
+        } else {
+            null
+        }
+        
+        // Construire l'URL complète du logo
+        val logoImageUrl: String? = if (blog.logoImageUrl != null && blog.logoImageUrl.isNotBlank()) {
+            if (blog.logoImageUrl.startsWith("http://") || blog.logoImageUrl.startsWith("https://")) {
+                // URL externe complète, l'utiliser telle quelle
+                blog.logoImageUrl
+            } else {
+                // Chemin relatif ou nom de fichier, construire l'URL complète
+                "$baseUrl/api/blogs/$blogId/logo-image"
+            }
+        } else {
+            null
+        }
+        
         return BlogSummaryDto(
             id = blogId,
             title = blog.title,
             description = blog.description,
             slug = blog.slug,
             shareId = blog.shareId,
-            // ⚠️ IMPORTANT : Retourner les URLs API au lieu des chemins directs
-            logoImageUrl = normalizeImageUrl(blog.logoImageUrl)?.let { url ->
-                if (url.startsWith("/uploads/")) {
-                    // Convertir le chemin en URL API
-                    "/api/blogs/$blogId/logo-image"
-                } else {
-                    url // Garder les URLs externes telles quelles
-                }
-            },
-            coverImageUrl = normalizeImageUrl(blog.coverImageUrl)?.let { url ->
-                if (url.startsWith("/uploads/")) {
-                    // Convertir le chemin en URL API
-                    "/api/blogs/$blogId/cover-image"
-                } else {
-                    url // Garder les URLs externes telles quelles
-                }
-            },
+            logoImageUrl = logoImageUrl,   // ⭐ URL complète
+            coverImageUrl = coverImageUrl, // ⭐ URL complète
             tags = blog.tags.takeIf { it.isNotEmpty() },
             authorId = blog.authorId.toHexString(),
             isPublished = blog.isPublished,
@@ -629,27 +669,4 @@ class BlogService(
         )
     }
 
-    /**
-     * Normalise les URLs d'images pour le frontend :
-     * - Retourne null si l'URL est null ou vide
-     * - Retourne l'URL telle quelle si c'est une URL externe (http:// ou https://)
-     * - S'assure que les chemins locaux commencent par "/"
-     */
-    private fun normalizeImageUrl(url: String?): String? {
-        if (url.isNullOrBlank()) {
-            return null
-        }
-        
-        // Si c'est déjà une URL externe, la retourner telle quelle
-        if (url.startsWith("http://") || url.startsWith("https://")) {
-            return url
-        }
-        
-        // Si c'est un chemin local, s'assurer qu'il commence par "/"
-        return if (url.startsWith("/")) {
-            url
-        } else {
-            "/$url"
-        }
-    }
 }
