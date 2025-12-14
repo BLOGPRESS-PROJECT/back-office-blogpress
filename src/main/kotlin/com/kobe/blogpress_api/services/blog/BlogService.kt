@@ -16,6 +16,9 @@ import com.kobe.blogpress_api.exception.BlogNotFoundException
 import com.kobe.blogpress_api.exception.BlogNotPublishedException
 import com.kobe.blogpress_api.exception.BlogPrivateException
 import com.kobe.blogpress_api.exception.ContentNotYetPublishedException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -29,6 +32,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
+import org.springframework.context.annotation.Lazy
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -42,6 +46,7 @@ class BlogService(
     private val articleRepository: com.kobe.blogpress_api.repository.article.ArticleRepository,
     private val favoriteRepository: com.kobe.blogpress_api.repository.interaction.FavoriteRepository,
     private val likeRepository: com.kobe.blogpress_api.repository.interaction.LikeRepository,
+    @Lazy private val blogImageService: com.kobe.blogpress_api.services.fileStorage.BlogImageService,
     @Value("\${app.base-url:http://localhost:8090}") private val baseUrl: String,
     @Value("\${app.frontend-url:http://localhost:3000}") private val frontendUrl: String
 ) {
@@ -401,8 +406,12 @@ class BlogService(
         // Récupérer tous les blogs de l'utilisateur
         val allBlogs = blogRepository.findByAuthorId(authorId).collectList().awaitSingle()
         
-        // Convertir en DTOs
-        var blogs = allBlogs.map { toBlogSummaryDto(it) }
+        // Convertir en DTOs (avec vérification de l'existence des fichiers)
+        var blogs = coroutineScope {
+            allBlogs.map { blog ->
+                async { toBlogSummaryDto(blog) }
+            }.awaitAll()
+        }
         
         // Filtrage par statut
         if (status != null && status != "all") {
@@ -552,7 +561,9 @@ class BlogService(
 
     suspend fun getPublishedBlogs(page: Int, size: Int): Flow<BlogSummaryDto> {
         val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
-        return blogRepository.findByIsPublishedAndIsPrivate(true, false, pageable).asFlow().map { toBlogSummaryDto(it) }
+        return blogRepository.findByIsPublishedAndIsPrivate(true, false, pageable)
+            .asFlow()
+            .map { blog -> toBlogSummaryDto(blog) }
     }
 
     suspend fun getFavoriteBlogs(userId: ObjectId, page: Int, size: Int): Flow<BlogSummaryDto> {
@@ -575,7 +586,7 @@ class BlogService(
         
         return mongoTemplate.find(query, Blog::class.java)
             .asFlow()
-            .map { toBlogSummaryDto(it) }
+            .map { blog -> toBlogSummaryDto(blog) }
     }
 
     // Incréments atomiques directement dans le service
@@ -630,7 +641,7 @@ class BlogService(
         return blogRepository.findById(blogId).awaitSingleOrNull() ?: error("Blog not found with id: ${blogId.toHexString()}")
     }
 
-    private fun toBlogResponse(blog: Blog): BlogResponse {
+    private suspend fun toBlogResponse(blog: Blog): BlogResponse {
         val blogId = blog.id.toHexString()
         
         // Construire l'URL complète de l'image de couverture
@@ -639,10 +650,18 @@ class BlogService(
                 // URL externe complète, l'utiliser telle quelle
                 blog.coverImageUrl
             } else {
-                // Chemin relatif ou nom de fichier, construire l'URL complète
-                "$baseUrl/api/blogs/$blogId/cover-image"
+                // ⭐ IMPORTANT : Vérifier si le fichier existe physiquement avant de construire l'URL
+                val coverImageExists = blogImageService.coverImageExists(blogId)
+                if (coverImageExists) {
+                    // Le fichier existe, construire l'URL complète
+                    "$baseUrl/api/blogs/$blogId/cover-image"
+                } else {
+                    // ⭐ FICHIER N'EXISTE PAS : Renvoyer null
+                    null
+                }
             }
         } else {
+            // ⭐ CHAMP NULL OU VIDE : Renvoyer null
             null
         }
         
@@ -652,10 +671,18 @@ class BlogService(
                 // URL externe complète, l'utiliser telle quelle
                 blog.logoImageUrl
             } else {
-                // Chemin relatif ou nom de fichier, construire l'URL complète
-                "$baseUrl/api/blogs/$blogId/logo-image"
+                // ⭐ IMPORTANT : Vérifier si le fichier existe physiquement avant de construire l'URL
+                val logoImageExists = blogImageService.logoImageExists(blogId)
+                if (logoImageExists) {
+                    // Le fichier existe, construire l'URL complète
+                    "$baseUrl/api/blogs/$blogId/logo-image"
+                } else {
+                    // ⭐ FICHIER N'EXISTE PAS : Renvoyer null
+                    null
+                }
             }
         } else {
+            // ⭐ CHAMP NULL OU VIDE : Renvoyer null
             null
         }
         
@@ -683,7 +710,7 @@ class BlogService(
         )
     }
 
-    private fun toBlogSummaryDto(blog: Blog): BlogSummaryDto {
+    private suspend fun toBlogSummaryDto(blog: Blog): BlogSummaryDto {
         val blogId = blog.id.toHexString()
         
         // Construire l'URL complète de l'image de couverture
@@ -692,10 +719,18 @@ class BlogService(
                 // URL externe complète, l'utiliser telle quelle
                 blog.coverImageUrl
             } else {
-                // Chemin relatif ou nom de fichier, construire l'URL complète
-                "$baseUrl/api/blogs/$blogId/cover-image"
+                // ⭐ IMPORTANT : Vérifier si le fichier existe physiquement avant de construire l'URL
+                val coverImageExists = blogImageService.coverImageExists(blogId)
+                if (coverImageExists) {
+                    // Le fichier existe, construire l'URL complète
+                    "$baseUrl/api/blogs/$blogId/cover-image"
+                } else {
+                    // ⭐ FICHIER N'EXISTE PAS : Renvoyer null
+                    null
+                }
             }
         } else {
+            // ⭐ CHAMP NULL OU VIDE : Renvoyer null
             null
         }
         
@@ -705,10 +740,18 @@ class BlogService(
                 // URL externe complète, l'utiliser telle quelle
                 blog.logoImageUrl
             } else {
-                // Chemin relatif ou nom de fichier, construire l'URL complète
-                "$baseUrl/api/blogs/$blogId/logo-image"
+                // ⭐ IMPORTANT : Vérifier si le fichier existe physiquement avant de construire l'URL
+                val logoImageExists = blogImageService.logoImageExists(blogId)
+                if (logoImageExists) {
+                    // Le fichier existe, construire l'URL complète
+                    "$baseUrl/api/blogs/$blogId/logo-image"
+                } else {
+                    // ⭐ FICHIER N'EXISTE PAS : Renvoyer null
+                    null
+                }
             }
         } else {
+            // ⭐ CHAMP NULL OU VIDE : Renvoyer null
             null
         }
         
