@@ -26,4 +26,6 @@ interface FavoriteRepository : ReactiveMongoRepository<Favorite, ObjectId> {
     fun countByContentIdAndContentType(contentId: ObjectId, contentType: ContentType): Mono<Long>
     
     fun findByUserIdAndContentType(userId: ObjectId, contentType: ContentType): Flux<Favorite>
+    
+    fun deleteByContentIdAndContentType(contentId: ObjectId, contentType: ContentType): Mono<Void>
 }

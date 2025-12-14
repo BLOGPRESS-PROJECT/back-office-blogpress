@@ -235,11 +235,14 @@ Lors de la suppression d'un blog via `DELETE /api/blogs/{blogId}` :
 - ✅ L'image de couverture du blog est supprimée (si locale)
 - ✅ L'image logo du blog est supprimée (si locale)
 - ✅ Les images de couverture de tous les articles associés sont supprimées (si locales)
+- ✅ **Toutes les interactions (likes, favorites) du blog sont supprimées**
+- ✅ **Toutes les interactions (likes, favorites) de tous les articles associés sont supprimées**
 
 ### Articles
 
 Lors de la suppression d'un article via `DELETE /api/articles/{articleId}` :
 - ✅ L'image de couverture de l'article est supprimée (si locale)
+- ✅ **Toutes les interactions (likes, favorites) de l'article sont supprimées**
 
 ---
 

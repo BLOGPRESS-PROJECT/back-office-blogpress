@@ -34,6 +34,7 @@ class ArticleService(
     private val blogRepository: BlogRepository,
     private val articleSlugService: ArticleSlugService,
     private val favoriteRepository: com.kobe.blogpress_api.repository.interaction.FavoriteRepository,
+    private val likeRepository: com.kobe.blogpress_api.repository.interaction.LikeRepository,
     private val mongoTemplate: org.springframework.data.mongodb.core.ReactiveMongoTemplate,
     private val fileStorageService: com.kobe.blogpress_api.services.fileStorage.FileStorageService,
     @Value("\${app.base-url:http://localhost:8090}") private val baseUrl: String,
@@ -362,6 +363,22 @@ class ArticleService(
         } catch (e: Exception) {
             logger.warn("Error deleting cover image for article ${article.id.toHexString()}: ${e.message}", e)
             // Continuer même si la suppression de l'image échoue
+        }
+
+        // Supprimer les interactions (likes et favorites) de l'article
+        try {
+            likeRepository.deleteByContentIdAndContentType(
+                articleId,
+                com.kobe.blogpress_api.domain.interaction.ContentType.ARTICLE
+            ).awaitSingleOrNull()
+            favoriteRepository.deleteByContentIdAndContentType(
+                articleId,
+                com.kobe.blogpress_api.domain.interaction.ContentType.ARTICLE
+            ).awaitSingleOrNull()
+            logger.debug("Interactions deleted for article: ${article.id.toHexString()}")
+        } catch (e: Exception) {
+            logger.warn("Error deleting interactions for article ${article.id.toHexString()}: ${e.message}", e)
+            // Continuer même si la suppression des interactions échoue
         }
 
         // Décrémenter le compteur du blog si c'est un BLOG_POST

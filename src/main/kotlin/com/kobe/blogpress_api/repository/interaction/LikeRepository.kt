@@ -23,4 +23,6 @@ interface LikeRepository : ReactiveMongoRepository<Like, ObjectId> {
     ): Mono<Like>
 
     fun countByContentIdAndContentType(contentId: ObjectId, contentType: ContentType): Mono<Long>
+    
+    fun deleteByContentIdAndContentType(contentId: ObjectId, contentType: ContentType): Mono<Void>
 }

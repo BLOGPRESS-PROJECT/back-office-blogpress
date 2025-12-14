@@ -41,6 +41,7 @@ class BlogService(
     private val fileStorageService: FileStorageService,
     private val articleRepository: com.kobe.blogpress_api.repository.article.ArticleRepository,
     private val favoriteRepository: com.kobe.blogpress_api.repository.interaction.FavoriteRepository,
+    private val likeRepository: com.kobe.blogpress_api.repository.interaction.LikeRepository,
     @Value("\${app.base-url:http://localhost:8090}") private val baseUrl: String,
     @Value("\${app.frontend-url:http://localhost:3000}") private val frontendUrl: String
 ) {
@@ -214,6 +215,24 @@ class BlogService(
                 }
             }
             
+            // Supprimer les interactions (likes et favorites) de tous les articles
+            articles.forEach { article ->
+                try {
+                    likeRepository.deleteByContentIdAndContentType(
+                        article.id,
+                        com.kobe.blogpress_api.domain.interaction.ContentType.ARTICLE
+                    ).awaitSingleOrNull()
+                    favoriteRepository.deleteByContentIdAndContentType(
+                        article.id,
+                        com.kobe.blogpress_api.domain.interaction.ContentType.ARTICLE
+                    ).awaitSingleOrNull()
+                    logger.debug("Interactions deleted for article: ${article.id.toHexString()}")
+                } catch (e: Exception) {
+                    logger.warn("Error deleting interactions for article ${article.id.toHexString()}: ${e.message}", e)
+                    // Continuer même si la suppression des interactions échoue
+                }
+            }
+            
             // Supprimer tous les articles de la base de données
             if (articles.isNotEmpty()) {
                 articleRepository.deleteByBlogId(blogId).awaitSingleOrNull()
@@ -224,7 +243,23 @@ class BlogService(
             throw RuntimeException("Failed to delete articles for blog: ${e.message}", e)
         }
         
-        // 2. Supprimer les images associées au blog
+        // 2. Supprimer les interactions (likes et favorites) du blog
+        try {
+            likeRepository.deleteByContentIdAndContentType(
+                blogId,
+                com.kobe.blogpress_api.domain.interaction.ContentType.BLOG
+            ).awaitSingleOrNull()
+            favoriteRepository.deleteByContentIdAndContentType(
+                blogId,
+                com.kobe.blogpress_api.domain.interaction.ContentType.BLOG
+            ).awaitSingleOrNull()
+            logger.info("Interactions deleted for blog: ${blogId.toHexString()}")
+        } catch (e: Exception) {
+            logger.warn("Error deleting interactions for blog ${blogId.toHexString()}: ${e.message}", e)
+            // Continuer même si la suppression des interactions échoue
+        }
+        
+        // 3. Supprimer les images associées au blog
         try {
             // Supprimer l'image de couverture si elle existe et est un fichier local
             if (!blog.coverImageUrl.isNullOrBlank() && fileStorageService.isLocalFile(blog.coverImageUrl)) {
@@ -242,7 +277,7 @@ class BlogService(
             // Continuer la suppression du blog même si la suppression des images échoue
         }
         
-        // 3. Supprimer le blog de la base de données
+        // 4. Supprimer le blog de la base de données
         try {
             blogRepository.delete(blog).awaitSingleOrNull()
             logger.info("Blog deleted successfully: ${blogId.toHexString()}")
