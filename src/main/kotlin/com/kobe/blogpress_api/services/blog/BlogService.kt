@@ -102,6 +102,39 @@ class BlogService(
         val normalizedLogoImageUrl = request.logoImageUrl?.takeIf { it.isNotBlank() }
         val normalizedCoverImageUrl = request.coverImageUrl?.takeIf { it.isNotBlank() }
         
+        // Supprimer les anciennes images si de nouvelles sont fournies
+        if (request.logoImageUrl != null && normalizedLogoImageUrl != null) {
+            // Une nouvelle image logo est fournie
+            if (existing.logoImageUrl != null && 
+                existing.logoImageUrl.isNotBlank() && 
+                existing.logoImageUrl != normalizedLogoImageUrl &&
+                fileStorageService.isLocalFile(existing.logoImageUrl)) {
+                try {
+                    fileStorageService.deleteBlogLogoImage(existing.logoImageUrl)
+                    logger.debug("Old logo image deleted for blog: ${blogId.toHexString()}")
+                } catch (e: Exception) {
+                    logger.warn("Error deleting old logo image for blog ${blogId.toHexString()}: ${e.message}", e)
+                    // Continuer même si la suppression échoue
+                }
+            }
+        }
+        
+        if (request.coverImageUrl != null && normalizedCoverImageUrl != null) {
+            // Une nouvelle image de couverture est fournie
+            if (existing.coverImageUrl != null && 
+                existing.coverImageUrl.isNotBlank() && 
+                existing.coverImageUrl != normalizedCoverImageUrl &&
+                fileStorageService.isLocalFile(existing.coverImageUrl)) {
+                try {
+                    fileStorageService.deleteBlogCoverImage(existing.coverImageUrl)
+                    logger.debug("Old cover image deleted for blog: ${blogId.toHexString()}")
+                } catch (e: Exception) {
+                    logger.warn("Error deleting old cover image for blog ${blogId.toHexString()}: ${e.message}", e)
+                    // Continuer même si la suppression échoue
+                }
+            }
+        }
+        
         // Gérer la publication programmée
         val now = Instant.now()
         val finalPublishAt = request.publishAt ?: existing.publishAt

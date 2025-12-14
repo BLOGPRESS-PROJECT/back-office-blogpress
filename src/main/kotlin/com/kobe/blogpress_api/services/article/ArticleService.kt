@@ -23,6 +23,7 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.UUID
@@ -34,9 +35,12 @@ class ArticleService(
     private val articleSlugService: ArticleSlugService,
     private val favoriteRepository: com.kobe.blogpress_api.repository.interaction.FavoriteRepository,
     private val mongoTemplate: org.springframework.data.mongodb.core.ReactiveMongoTemplate,
+    private val fileStorageService: com.kobe.blogpress_api.services.fileStorage.FileStorageService,
     @Value("\${app.base-url:http://localhost:8090}") private val baseUrl: String,
     @Value("\${app.frontend-url:http://localhost:3000}") private val frontendUrl: String
 ) {
+
+    private val logger = LoggerFactory.getLogger(ArticleService::class.java)
 
     // ===== CRÉATION =====
 
@@ -295,12 +299,34 @@ class ArticleService(
         // Le shareId ne change jamais, donc l'URL publique reste la même
         val newPublicUrl = article.publicUrl // Garder l'URL avec le shareId original
 
+        // Gérer la suppression de l'ancienne image de couverture si une nouvelle est fournie
+        val finalCoverImageUrl = if (request.coverImageUrl != null) {
+            // Si une nouvelle image est fournie, supprimer l'ancienne si elle existe et est locale
+            if (article.coverImageUrl != null && 
+                article.coverImageUrl.isNotBlank() && 
+                article.coverImageUrl != request.coverImageUrl &&
+                fileStorageService.isLocalFile(article.coverImageUrl)) {
+                try {
+                    fileStorageService.deleteArticleCoverImage(article.coverImageUrl)
+                    logger.debug("Old cover image deleted for article: ${article.id.toHexString()}")
+                } catch (e: Exception) {
+                    logger.warn("Error deleting old cover image for article ${article.id.toHexString()}: ${e.message}", e)
+                    // Continuer même si la suppression échoue
+                }
+            }
+            // Normaliser : convertir les chaînes vides en null
+            request.coverImageUrl.takeIf { it.isNotBlank() }
+        } else {
+            // Aucune nouvelle image fournie, garder l'ancienne
+            article.coverImageUrl
+        }
+
         val updatedArticle = article.copy(
             title = request.title ?: article.title,
             content = request.content ?: article.content,
             excerpt = request.excerpt ?: article.excerpt,
             slug = newSlug,
-            coverImageUrl = request.coverImageUrl ?: article.coverImageUrl,
+            coverImageUrl = finalCoverImageUrl,
             tags = request.tags ?: article.tags,
             category = request.category ?: article.category,
             isPublished = finalIsPublished,
@@ -325,6 +351,17 @@ class ArticleService(
         // Vérifier que l'utilisateur est l'auteur
         if (article.authorId != authorId) {
             throw IllegalArgumentException("You are not authorized to delete this article")
+        }
+
+        // Supprimer l'image de couverture si elle existe et est locale
+        try {
+            if (!article.coverImageUrl.isNullOrBlank() && fileStorageService.isLocalFile(article.coverImageUrl)) {
+                fileStorageService.deleteArticleCoverImage(article.coverImageUrl)
+                logger.debug("Article cover image deleted: ${article.id.toHexString()}")
+            }
+        } catch (e: Exception) {
+            logger.warn("Error deleting cover image for article ${article.id.toHexString()}: ${e.message}", e)
+            // Continuer même si la suppression de l'image échoue
         }
 
         // Décrémenter le compteur du blog si c'est un BLOG_POST
