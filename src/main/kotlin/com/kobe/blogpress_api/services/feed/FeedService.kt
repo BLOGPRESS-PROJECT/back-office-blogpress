@@ -236,6 +236,24 @@ class FeedService(
             null
         }
 
+        // Déterminer la date de publication selon la logique recommandée
+        val publishAt: LocalDateTime? = when {
+            // Si l'article est publié et a une date de publication programmée
+            article.isPublished && article.publishAt != null -> {
+                LocalDateTime.ofInstant(article.publishAt, ZoneId.systemDefault())
+            }
+            // Si l'article est publié mais n'a pas de date programmée (publication immédiate)
+            article.isPublished && article.publishAt == null -> {
+                LocalDateTime.ofInstant(article.createdAt, ZoneId.systemDefault())
+            }
+            // Si l'article n'est pas encore publié mais a une date programmée
+            !article.isPublished && article.publishAt != null -> {
+                LocalDateTime.ofInstant(article.publishAt, ZoneId.systemDefault())
+            }
+            // Sinon, null (article non publié et non programmé)
+            else -> null
+        }
+
         FeedItemDto(
             id = article.id.toHexString(),
             blogId = article.blogId?.toHexString(),
@@ -246,6 +264,7 @@ class FeedService(
             excerpt = excerpt,
             coverImageUrl = coverImageUrl,
             createdAt = LocalDateTime.ofInstant(article.createdAt, ZoneId.systemDefault()),
+            publishAt = publishAt, // ⭐ NOUVEAU : Date de publication
             url = url,
             authorName = author.fullName,
             authorAvatar = author.profilePicture,

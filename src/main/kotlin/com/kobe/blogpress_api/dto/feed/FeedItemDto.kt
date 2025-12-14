@@ -25,6 +25,7 @@ data class FeedItemDto(
 
     // Dates
     val createdAt: LocalDateTime, // Date de création
+    val publishAt: LocalDateTime?, // ⭐ Date de publication (nullable)
 
     // Navigation interne (optionnelle pour le frontend)
     val url: String?,             // URL relative "SEO" optionnelle
