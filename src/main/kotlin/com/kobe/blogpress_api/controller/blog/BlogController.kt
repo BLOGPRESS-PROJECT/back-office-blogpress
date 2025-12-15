@@ -287,7 +287,7 @@ class BlogController(
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] Get favorite blogs for user: $userId - page=$page, size=$size")
         
-        val blogs = blogService.getFavoriteBlogs(ObjectId(userId), page, size).toList()
+        val blogs = blogService.getFavoriteBlogs(ObjectId(userId), page, size)
         
         return ResponseEntity.ok(
             ApiResponseDto.success(
@@ -366,7 +366,7 @@ class BlogController(
     ): ResponseEntity<ApiResponseDto<List<BlogSummaryDto>>> {
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] Get published blogs - page: $page, size: $size")
-        val blogs = blogService.getPublishedBlogs(page, size).toList()
+        val blogs = blogService.getPublishedBlogs(page, size)
         return ResponseEntity.ok(ApiResponseDto.success(data = blogs, message = "Published blogs retrieved successfully", requestId = requestId))
     }
 

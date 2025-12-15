@@ -19,11 +19,7 @@ import com.kobe.blogpress_api.exception.ContentNotYetPublishedException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactor.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import reactor.core.publisher.Flux
@@ -559,14 +555,20 @@ class BlogService(
         )
     }
 
-    suspend fun getPublishedBlogs(page: Int, size: Int): Flow<BlogSummaryDto> {
+    suspend fun getPublishedBlogs(page: Int, size: Int): List<BlogSummaryDto> {
         val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
-        return blogRepository.findByIsPublishedAndIsPrivate(true, false, pageable)
-            .asFlow()
-            .map { blog -> toBlogSummaryDto(blog) }
+        val blogs = blogRepository.findByIsPublishedAndIsPrivate(true, false, pageable)
+            .collectList()
+            .awaitSingle()
+        
+        return coroutineScope {
+            blogs.map { blog ->
+                async { toBlogSummaryDto(blog) }
+            }.awaitAll()
+        }
     }
 
-    suspend fun getFavoriteBlogs(userId: ObjectId, page: Int, size: Int): Flow<BlogSummaryDto> {
+    suspend fun getFavoriteBlogs(userId: ObjectId, page: Int, size: Int): List<BlogSummaryDto> {
         val contentType = com.kobe.blogpress_api.domain.interaction.ContentType.BLOG
         
         // Récupérer les IDs des blogs favoris
@@ -576,7 +578,7 @@ class BlogService(
             .awaitSingle()
         
         if (favoriteIds.isEmpty()) {
-            return kotlinx.coroutines.flow.emptyFlow()
+            return emptyList()
         }
         
         // Récupérer les blogs correspondants
@@ -584,9 +586,15 @@ class BlogService(
         val query = Query(Criteria.where("_id").`in`(favoriteIds))
             .with(pageable)
         
-        return mongoTemplate.find(query, Blog::class.java)
-            .asFlow()
-            .map { blog -> toBlogSummaryDto(blog) }
+        val blogs = mongoTemplate.find(query, Blog::class.java)
+            .collectList()
+            .awaitSingle()
+        
+        return coroutineScope {
+            blogs.map { blog ->
+                async { toBlogSummaryDto(blog) }
+            }.awaitAll()
+        }
     }
 
     // Incréments atomiques directement dans le service

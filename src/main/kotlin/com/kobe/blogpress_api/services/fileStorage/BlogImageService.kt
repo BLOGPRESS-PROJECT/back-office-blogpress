@@ -1,9 +1,10 @@
 package com.kobe.blogpress_api.services.fileStorage
 
 import com.kobe.blogpress_api.configuration.fileStorage.FileStorageProperties
-import com.kobe.blogpress_api.services.blog.BlogService
+import com.kobe.blogpress_api.repository.blog.BlogRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.reactor.awaitSingleOrNull
 import org.bson.types.ObjectId
 import org.springframework.core.io.Resource
 import org.springframework.core.io.UrlResource
@@ -15,7 +16,7 @@ import java.nio.file.Paths
 @Service
 class BlogImageService(
     private val fileStorageProperties: FileStorageProperties,
-    private val blogService: BlogService
+    private val blogRepository: BlogRepository
 ) {
 
     private val blogCoversPath: Path = fileStorageProperties.getBlogCoversPath()
@@ -37,7 +38,7 @@ class BlogImageService(
     suspend fun getCoverImageResource(blogId: String): Resource? {
         return withContext(Dispatchers.IO) {
             try {
-                val blog = blogService.getBlogById(ObjectId(blogId))
+                val blog = blogRepository.findById(ObjectId(blogId)).awaitSingleOrNull() ?: return@withContext null
                 val coverImageUrl = blog.coverImageUrl ?: return@withContext null
                 
                 // Extraire le nom de fichier du chemin
@@ -55,7 +56,7 @@ class BlogImageService(
     suspend fun getLogoImageResource(blogId: String): Resource? {
         return withContext(Dispatchers.IO) {
             try {
-                val blog = blogService.getBlogById(ObjectId(blogId))
+                val blog = blogRepository.findById(ObjectId(blogId)).awaitSingleOrNull() ?: return@withContext null
                 val logoImageUrl = blog.logoImageUrl ?: return@withContext null
                 
                 // Extraire le nom de fichier du chemin
