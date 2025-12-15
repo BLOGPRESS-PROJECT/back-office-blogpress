@@ -211,7 +211,7 @@ class UserController(
         val oldPicture = user.profilePicture
 
         // Appel direct sans .awaitSingle()
-        fileStorageService.deleteProfilePicture(oldPicture ?: "")
+        fileStorageService.deleteProfilePicture(oldPicture ?: "", ObjectId(userId))
         val updatedUser = userService.updateProfilePicture(ObjectId(userId), "")
 
         logger.info("[$requestId] Profile picture deleted successfully for user: $userId")

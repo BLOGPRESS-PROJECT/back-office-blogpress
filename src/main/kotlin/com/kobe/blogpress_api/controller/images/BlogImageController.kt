@@ -196,10 +196,10 @@ class BlogImageController(
         }
 
         if (!blog.coverImageUrl.isNullOrBlank() && fileStorageService.isLocalFile(blog.coverImageUrl)) {
-            fileStorageService.deleteBlogCoverImage(blog.coverImageUrl)
+            fileStorageService.deleteBlogCoverImage(blog.coverImageUrl, ObjectId(userId))
         }
 
-        val imageUrl = fileStorageService.storeBlogCoverImage(filePart, blogId)
+        val imageUrl = fileStorageService.storeBlogCoverImage(filePart, blogId, ObjectId(userId))
         blogService.updateBlog(ObjectId(blogId), UpdateBlogRequest(coverImageUrl = imageUrl), ObjectId(userId))
 
         return ResponseEntity.ok(
@@ -226,10 +226,10 @@ class BlogImageController(
         }
 
         if (!blog.logoImageUrl.isNullOrBlank() && fileStorageService.isLocalFile(blog.logoImageUrl)) {
-            fileStorageService.deleteBlogLogoImage(blog.logoImageUrl)
+            fileStorageService.deleteBlogLogoImage(blog.logoImageUrl, ObjectId(userId))
         }
 
-        val imageUrl = fileStorageService.storeBlogLogoImage(filePart, blogId)
+        val imageUrl = fileStorageService.storeBlogLogoImage(filePart, blogId, ObjectId(userId))
         blogService.updateBlog(ObjectId(blogId), UpdateBlogRequest(logoImageUrl = imageUrl), ObjectId(userId))
 
         return ResponseEntity.ok(

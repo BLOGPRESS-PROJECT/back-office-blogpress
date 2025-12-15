@@ -112,7 +112,7 @@ class BlogService(
                 existing.logoImageUrl != normalizedLogoImageUrl &&
                 fileStorageService.isLocalFile(existing.logoImageUrl)) {
                 try {
-                    fileStorageService.deleteBlogLogoImage(existing.logoImageUrl)
+                    fileStorageService.deleteBlogLogoImage(existing.logoImageUrl, existing.authorId)
                     logger.debug("Old logo image deleted for blog: ${blogId.toHexString()}")
                 } catch (e: Exception) {
                     logger.warn("Error deleting old logo image for blog ${blogId.toHexString()}: ${e.message}", e)
@@ -128,7 +128,7 @@ class BlogService(
                 existing.coverImageUrl != normalizedCoverImageUrl &&
                 fileStorageService.isLocalFile(existing.coverImageUrl)) {
                 try {
-                    fileStorageService.deleteBlogCoverImage(existing.coverImageUrl)
+                    fileStorageService.deleteBlogCoverImage(existing.coverImageUrl, existing.authorId)
                     logger.debug("Old cover image deleted for blog: ${blogId.toHexString()}")
                 } catch (e: Exception) {
                     logger.warn("Error deleting old cover image for blog ${blogId.toHexString()}: ${e.message}", e)
@@ -207,7 +207,7 @@ class BlogService(
             articles.forEach { article ->
                 try {
                     if (!article.coverImageUrl.isNullOrBlank() && fileStorageService.isLocalFile(article.coverImageUrl)) {
-                        fileStorageService.deleteArticleCoverImage(article.coverImageUrl)
+                        fileStorageService.deleteArticleCoverImage(article.coverImageUrl, article.authorId)
                         logger.debug("Article cover image deleted: ${article.id.toHexString()}")
                     }
                 } catch (e: Exception) {
@@ -264,13 +264,13 @@ class BlogService(
         try {
             // Supprimer l'image de couverture si elle existe et est un fichier local
             if (!blog.coverImageUrl.isNullOrBlank() && fileStorageService.isLocalFile(blog.coverImageUrl)) {
-                fileStorageService.deleteBlogCoverImage(blog.coverImageUrl)
+                fileStorageService.deleteBlogCoverImage(blog.coverImageUrl, blog.authorId)
                 logger.info("Cover image deleted for blog: ${blogId.toHexString()}")
             }
             
             // Supprimer l'image logo si elle existe et est un fichier local
             if (!blog.logoImageUrl.isNullOrBlank() && fileStorageService.isLocalFile(blog.logoImageUrl)) {
-                fileStorageService.deleteBlogLogoImage(blog.logoImageUrl)
+                fileStorageService.deleteBlogLogoImage(blog.logoImageUrl, blog.authorId)
                 logger.info("Logo image deleted for blog: ${blogId.toHexString()}")
             }
         } catch (e: Exception) {
@@ -310,7 +310,7 @@ class BlogService(
             articles.forEach { article ->
                 try {
                     if (!article.coverImageUrl.isNullOrBlank() && fileStorageService.isLocalFile(article.coverImageUrl)) {
-                        fileStorageService.deleteArticleCoverImage(article.coverImageUrl)
+                        fileStorageService.deleteArticleCoverImage(article.coverImageUrl, article.authorId)
                         logger.debug("Article cover image deleted: ${article.id.toHexString()}")
                     }
                 } catch (e: Exception) {

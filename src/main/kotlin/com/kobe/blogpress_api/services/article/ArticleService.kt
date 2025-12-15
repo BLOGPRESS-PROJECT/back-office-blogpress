@@ -308,7 +308,7 @@ class ArticleService(
                 article.coverImageUrl != request.coverImageUrl &&
                 fileStorageService.isLocalFile(article.coverImageUrl)) {
                 try {
-                    fileStorageService.deleteArticleCoverImage(article.coverImageUrl)
+                    fileStorageService.deleteArticleCoverImage(article.coverImageUrl, article.authorId)
                     logger.debug("Old cover image deleted for article: ${article.id.toHexString()}")
                 } catch (e: Exception) {
                     logger.warn("Error deleting old cover image for article ${article.id.toHexString()}: ${e.message}", e)
@@ -357,7 +357,7 @@ class ArticleService(
         // Supprimer l'image de couverture si elle existe et est locale
         try {
             if (!article.coverImageUrl.isNullOrBlank() && fileStorageService.isLocalFile(article.coverImageUrl)) {
-                fileStorageService.deleteArticleCoverImage(article.coverImageUrl)
+                fileStorageService.deleteArticleCoverImage(article.coverImageUrl, article.authorId)
                 logger.debug("Article cover image deleted: ${article.id.toHexString()}")
             }
         } catch (e: Exception) {

@@ -88,11 +88,11 @@ class ArticleImageController(
 
         // Supprimer l'ancienne image si elle existe et est locale
         if (article.coverImageUrl != null && fileStorageService.isLocalFile(article.coverImageUrl)) {
-            fileStorageService.deleteArticleCoverImage(article.coverImageUrl)
+            fileStorageService.deleteArticleCoverImage(article.coverImageUrl, ObjectId(userId))
         }
 
         // Uploader la nouvelle image
-        val imageUrl = fileStorageService.storeArticleCoverImage(filePart, articleId)
+        val imageUrl = fileStorageService.storeArticleCoverImage(filePart, articleId, ObjectId(userId))
 
         // Mettre à jour l'article
         val updatedArticle = articleService.updateArticle(

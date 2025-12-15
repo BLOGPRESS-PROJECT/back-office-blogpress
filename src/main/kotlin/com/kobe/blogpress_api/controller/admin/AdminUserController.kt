@@ -2,8 +2,10 @@ package com.kobe.blogpress_api.controller.admin
 
 import com.kobe.blogpress_api.dto.common.ApiResponseDto
 import com.kobe.blogpress_api.dto.user.UserDTO
+import com.kobe.blogpress_api.services.storage.StorageQuotaService
 import com.kobe.blogpress_api.services.user.UserService
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import org.bson.types.ObjectId
 import org.slf4j.LoggerFactory
@@ -23,7 +25,8 @@ import java.util.UUID
 @RestController
 @RequestMapping("/api/admin/users")
 class AdminUserController(
-    private val userService: UserService
+    private val userService: UserService,
+    private val storageQuotaService: StorageQuotaService
 ) {
 
     private val logger = LoggerFactory.getLogger(AdminUserController::class.java)
@@ -55,9 +58,11 @@ class AdminUserController(
         )
 
         // Mapper en UserDTO (avec stats à jour) via coroutines
-        val dtoContent = coroutine(
-            usersPage.content
-        ) { userService.toDTO(it) }
+        val dtoContent = coroutineScope {
+            usersPage.content.map { user ->
+                async { userService.toDTO(user) }
+            }.awaitAll()
+        }
 
         val dtoPage: Page<UserDTO> = PageImpl(
             dtoContent,
@@ -88,6 +93,16 @@ class AdminUserController(
         logger.info("[$requestId] Admin $adminId promote user $userId to Golden")
 
         val user = userService.promoteToGoldenUser(ObjectId(userId), ObjectId(adminId))
+        
+        // ⭐ Mettre à jour le quota de stockage pour qu'il soit illimité
+        try {
+            storageQuotaService.updateQuotaToUnlimited(ObjectId(userId))
+            logger.info("[$requestId] Storage quota updated to unlimited for Golden User: $userId")
+        } catch (e: Exception) {
+            logger.warn("[$requestId] Could not update storage quota for Golden User $userId: ${e.message}")
+            // Ne pas faire échouer la promotion si le quota échoue
+        }
+        
         val dto = userService.toDTO(user)
 
         return ResponseEntity.ok(
@@ -112,7 +127,12 @@ class AdminUserController(
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] Admin $adminId revoke Golden status for user $userId")
 
-        val user = userService.revokeUser(gcd(ObjectId(userId), ObjectId(adminId)))
+        val user = userService.revokeGoldenUser(ObjectId(userId), ObjectId(adminId))
+        
+        // ⭐ Mettre à jour le quota de stockage pour revenir à la limite standard
+        // Note: Le quota existant reste, mais les nouveaux uploads seront limités
+        // On pourrait aussi réinitialiser le quota ici si nécessaire
+        
         val dto = userService.toDTO(user)
 
         return ResponseEntity.ok(

@@ -2,8 +2,10 @@ package com.kobe.blogpress_api.services.fileStorage
 
 import com.kobe.blogpress_api.configuration.fileStorage.FileStorageProperties
 import com.kobe.blogpress_api.exception.FileStorageException
+import com.kobe.blogpress_api.services.storage.StorageQuotaService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.bson.types.ObjectId
 import org.springframework.http.codec.multipart.FilePart
 import org.springframework.stereotype.Service
 import java.nio.file.Files
@@ -14,7 +16,8 @@ import java.util.*
 
 @Service
 class FileStorageService(
-    private val fileStorageProperties: FileStorageProperties
+    private val fileStorageProperties: FileStorageProperties,
+    private val storageQuotaService: StorageQuotaService
 ) {
 
     init {
@@ -39,46 +42,86 @@ class FileStorageService(
     // ===== PROFILE PICTURES =====
 
     suspend fun storeProfilePicture(file: FilePart, userId: String): String {
-        return storeFile(file, "profile-pictures", userId)
+        return storeFile(file, "profile-pictures", userId, ObjectId(userId))
     }
 
-    suspend fun deleteProfilePicture(fileName: String): Boolean {
-        return deleteFile(fileName, "profile-pictures")
+    suspend fun deleteProfilePicture(fileName: String, userId: ObjectId? = null): Boolean {
+        val deleted = deleteFile(fileName, "profile-pictures")
+        // Mettre à jour le quota si le fichier a été supprimé
+        if (deleted && userId != null) {
+            try {
+                val fileSize = getFileSize(fileName, "profile-pictures")
+                storageQuotaService.removeStorageUsage(userId, fileSize)
+            } catch (e: Exception) {
+                // Ignorer les erreurs de calcul de taille
+            }
+        }
+        return deleted
     }
 
     // ===== BLOG COVERS =====
 
-    suspend fun storeBlogCoverImage(file: FilePart, blogId: String): String {
-        return storeFile(file, "blog-covers", blogId)
+    suspend fun storeBlogCoverImage(file: FilePart, blogId: String, userId: ObjectId? = null): String {
+        return storeFile(file, "blog-covers", blogId, userId)
     }
 
-    suspend fun deleteBlogCoverImage(fileName: String): Boolean {
-        return deleteFile(fileName, "blog-covers")
+    suspend fun deleteBlogCoverImage(fileName: String, userId: ObjectId? = null): Boolean {
+        val deleted = deleteFile(fileName, "blog-covers")
+        // Mettre à jour le quota si le fichier a été supprimé
+        if (deleted && userId != null) {
+            try {
+                val fileSize = getFileSize(fileName, "blog-covers")
+                storageQuotaService.removeStorageUsage(userId, fileSize)
+            } catch (e: Exception) {
+                // Ignorer les erreurs de calcul de taille
+            }
+        }
+        return deleted
     }
 
     // ===== BLOG LOGOS =====
 
-    suspend fun storeBlogLogoImage(file: FilePart, blogId: String): String {
-        return storeFile(file, "blog-logos", blogId)
+    suspend fun storeBlogLogoImage(file: FilePart, blogId: String, userId: ObjectId? = null): String {
+        return storeFile(file, "blog-logos", blogId, userId)
     }
 
-    suspend fun deleteBlogLogoImage(fileName: String): Boolean {
-        return deleteFile(fileName, "blog-logos")
+    suspend fun deleteBlogLogoImage(fileName: String, userId: ObjectId? = null): Boolean {
+        val deleted = deleteFile(fileName, "blog-logos")
+        // Mettre à jour le quota si le fichier a été supprimé
+        if (deleted && userId != null) {
+            try {
+                val fileSize = getFileSize(fileName, "blog-logos")
+                storageQuotaService.removeStorageUsage(userId, fileSize)
+            } catch (e: Exception) {
+                // Ignorer les erreurs de calcul de taille
+            }
+        }
+        return deleted
     }
 
     // ===== ARTICLE COVERS =====
 
-    suspend fun storeArticleCoverImage(file: FilePart, articleId: String): String {
-        return storeFile(file, "article-covers", articleId)
+    suspend fun storeArticleCoverImage(file: FilePart, articleId: String, userId: ObjectId? = null): String {
+        return storeFile(file, "article-covers", articleId, userId)
     }
 
-    suspend fun deleteArticleCoverImage(fileName: String): Boolean {
-        return deleteFile(fileName, "article-covers")
+    suspend fun deleteArticleCoverImage(fileName: String, userId: ObjectId? = null): Boolean {
+        val deleted = deleteFile(fileName, "article-covers")
+        // Mettre à jour le quota si le fichier a été supprimé
+        if (deleted && userId != null) {
+            try {
+                val fileSize = getFileSize(fileName, "article-covers")
+                storageQuotaService.removeStorageUsage(userId, fileSize)
+            } catch (e: Exception) {
+                // Ignorer les erreurs de calcul de taille
+            }
+        }
+        return deleted
     }
 
     // ===== GENERIC METHODS =====
 
-    private suspend fun storeFile(file: FilePart, directory: String, entityId: String): String {
+    private suspend fun storeFile(file: FilePart, directory: String, entityId: String, userId: ObjectId? = null): String {
         return withContext(Dispatchers.IO) {
             // Valider le type de fichier
             val contentType = file.headers().contentType?.toString() ?: ""
@@ -86,6 +129,20 @@ class FileStorageService(
                 throw FileStorageException(
                     "File type not allowed. Allowed types: ${fileStorageProperties.allowedTypes}"
                 )
+            }
+
+            // ⭐ Vérifier le quota de stockage (si userId fourni)
+            if (userId != null) {
+                // Obtenir la taille du fichier (approximative via headers)
+                val contentLength = file.headers().contentLength() ?: 0L
+                if (contentLength > 0) {
+                    val canStore = storageQuotaService.canStoreFile(userId, contentLength)
+                    if (!canStore) {
+                        throw FileStorageException(
+                            "Storage quota exceeded. Please upgrade to Golden User for unlimited storage."
+                        )
+                    }
+                }
             }
 
             // Générer un nom de fichier unique
@@ -106,6 +163,17 @@ class FileStorageService(
 
                 if (!Files.exists(destinationPath)) {
                     throw FileStorageException("Failed to save file")
+                }
+
+                // ⭐ Mettre à jour le quota de stockage (si userId fourni)
+                if (userId != null) {
+                    try {
+                        val fileSize = Files.size(destinationPath)
+                        storageQuotaService.addStorageUsage(userId, fileSize)
+                    } catch (e: Exception) {
+                        // Log mais ne pas faire échouer l'upload
+                        println("Warning: Could not update storage quota: ${e.message}")
+                    }
                 }
 
                 // Retourner l'URL relative
@@ -155,5 +223,25 @@ class FileStorageService(
     fun isLocalFile(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
         return url.startsWith("/uploads/")
+    }
+
+    /**
+     * Récupère la taille d'un fichier en bytes.
+     */
+    private suspend fun getFileSize(fileName: String, directory: String): Long {
+        return withContext(Dispatchers.IO) {
+            try {
+                val filePath = Paths.get(fileStorageProperties.basePath)
+                    .resolve(directory)
+                    .resolve(fileName.substringAfterLast("/"))
+                if (Files.exists(filePath)) {
+                    Files.size(filePath)
+                } else {
+                    0L
+                }
+            } catch (e: Exception) {
+                0L
+            }
+        }
     }
 }

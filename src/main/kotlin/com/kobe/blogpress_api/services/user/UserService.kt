@@ -9,6 +9,9 @@ import com.kobe.blogpress_api.exception.ResourceNotFoundException
 import com.kobe.blogpress_api.repository.blog.BlogRepository
 import com.kobe.blogpress_api.repository.article.ArticleRepository
 import com.kobe.blogpress_api.repository.user.UserRepository
+import org.springframework.data.mongodb.core.ReactiveMongoTemplate
+import org.springframework.data.mongodb.core.query.Criteria
+import org.springframework.data.mongodb.core.query.Query
 import kotlinx.coroutines.reactor.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import org.bson.types.ObjectId
@@ -23,7 +26,8 @@ import java.time.LocalDate
 class UserService(
     private val userRepository: UserRepository,
     private val blogRepository: BlogRepository,
-    private val articleRepository: ArticleRepository
+    private val articleRepository: ArticleRepository,
+    private val mongoTemplate: ReactiveMongoTemplate
 ) {
 
     suspend fun findById(userId: ObjectId): User {
@@ -162,7 +166,19 @@ class UserService(
             updatedAt = Instant.now()
         )
 
-        return userRepository.save(updatedUser).awaitSingle()
+        val savedUser = userRepository.save(updatedUser).awaitSingle()
+
+        // ⭐ Mettre à jour le quota de stockage pour qu'il soit illimité
+        try {
+            // Injection lazy pour éviter les dépendances circulaires
+            // Le StorageQuotaService sera injecté via @Lazy si nécessaire
+            // Pour l'instant, on laisse cette logique dans le contrôleur ou un service dédié
+        } catch (e: Exception) {
+            // Log mais ne pas faire échouer la promotion
+            logger.warn("Could not update storage quota for Golden User ${userId.toHexString()}: ${e.message}")
+        }
+
+        return savedUser
     }
 
     // Révoquer le statut Golden User (ADMIN seulement)
@@ -200,27 +216,27 @@ class UserService(
     }
 
 
-     suspend fun updatePrivacyPreferences(
-         userId: ObjectId,
-         preferences: PrivacyPreferencesDTO
-     ): User {
-         val user = findById(userId)
-         val updatedUser = user.copy(
-             isPublic = preferences.isPublic,
-             showEmail = preferences.showEmail,
-             showLocation = preferences.showLocation,
-             updatedAt = Instant.now()
-         )
-         return userRepository.save(updatedUser).awaitSingle()
-     }
+    suspend fun updatePrivacyPreferences(
+        userId: ObjectId,
+        preferences: PrivacyPreferencesDTO
+    ): User {
+        val user = findById(userId)
+        val updatedUser = user.copy(
+            isPublic = preferences.isPublic,
+            showEmail = preferences.showEmail,
+            showLocation = preferences.showLocation,
+            updatedAt = Instant.now()
+        )
+        return userRepository.save(updatedUser).awaitSingle()
+    }
 
     // ⭐ NOUVEAU : Calculer les statistiques à la volée pour s'assurer qu'elles sont à jour
     suspend fun calculateUserStatistics(userId: ObjectId): com.kobe.blogpress_api.domain.model.user.UserStatistics {
         val totalBlogs = blogRepository.countByAuthorId(userId).awaitSingle()
         val totalPosts = articleRepository.countByAuthorId(userId).awaitSingle()
-        
+
         val user = findById(userId)
-        
+
         // Utiliser les statistiques existantes pour les autres champs (followers, following, etc.)
         // et mettre à jour totalBlogs et totalPosts
         return user.statistics.copy(
@@ -232,22 +248,82 @@ class UserService(
     }
 
     /**
-     * Récupérer tous les utilisateurs paginés (pour l'admin).
+     * Récupérer tous les utilisateurs paginés (pour l'admin) avec filtres.
      */
-    suspend fun findAllUsers(page: Int, size: Int): Page<User> {
+    suspend fun findAllUsers(
+        page: Int,
+        size: Int,
+        search: String? = null,
+        role: String? = null,
+        isGolden: Boolean? = null,
+        isActive: Boolean? = null
+    ): Page<User> {
         val pageable = PageRequest.of(page, size)
 
-        // Compter le nombre total d'utilisateurs
-        val total = userRepository.count().awaitSingle()
+        // Construire la query de base
+        val baseQuery = Query()
 
-        // Récupérer uniquement la page demandée à partir du Flux réactif
-        val users = userRepository.findAll()
-            .skip((page * size).toLong())
-            .take(size.toLong())
+        if (!search.isNullOrBlank()) {
+            baseQuery.addCriteria(
+                Criteria().orOperator(
+                    Criteria.where("username").regex(search, "i"),
+                    Criteria.where("email").regex(search, "i"),
+                    Criteria.where("fullName").regex(search, "i")
+                )
+            )
+        }
+
+        if (!role.isNullOrBlank()) {
+            val roleEnum = Role.valueOf(role)
+            baseQuery.addCriteria(Criteria.where("role").`is`(roleEnum))
+        }
+
+        if (isGolden != null) {
+            baseQuery.addCriteria(Criteria.where("isGoldenUser").`is`(isGolden))
+        }
+
+        if (isActive != null) {
+            baseQuery.addCriteria(Criteria.where("isActive").`is`(isActive))
+        }
+
+        // Query paginée pour les données
+        val dataQuery = Query.of(baseQuery).with(pageable)
+        val users = mongoTemplate.find(dataQuery, User::class.java)
             .collectList()
             .awaitSingle()
 
+        // Query sans pagination pour le total
+        val countQuery = Query.of(baseQuery).limit(-1).skip(-1)
+        val total = mongoTemplate.count(countQuery, User::class.java).awaitSingle()
+
         return PageImpl(users, pageable, total)
+    }
+
+    /**
+     * Désactiver un utilisateur (ADMIN seulement via routes /api/admin/**).
+     */
+    suspend fun deactivateUser(userId: ObjectId): User {
+        val user = findById(userId)
+        val updated = user.copy(isActive = false, updatedAt = Instant.now())
+        return userRepository.save(updated).awaitSingle()
+    }
+
+    /**
+     * Activer un utilisateur (ADMIN seulement via routes /api/admin/**).
+     */
+    suspend fun activateUser(userId: ObjectId): User {
+        val user = findById(userId)
+        val updated = user.copy(isActive = true, updatedAt = Instant.now())
+        return userRepository.save(updated).awaitSingle()
+    }
+
+    /**
+     * Supprimer un utilisateur (ADMIN).
+     * TODO: gérer la suppression/anonymisation des contenus associés si nécessaire.
+     */
+    suspend fun deleteUser(userId: ObjectId) {
+        val user = findById(userId)
+        userRepository.delete(user).awaitSingleOrNull()
     }
 
     // Ajoute cette méthode
