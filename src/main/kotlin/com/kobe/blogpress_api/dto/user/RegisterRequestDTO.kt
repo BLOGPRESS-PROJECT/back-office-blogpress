@@ -65,6 +65,5 @@ data class RegisterRequestDTO(
     val website: String? = null,
 
     val profilePictureUrl: String? = null,
-
     val socialLinks: SocialLinksDTO? = null
 )
