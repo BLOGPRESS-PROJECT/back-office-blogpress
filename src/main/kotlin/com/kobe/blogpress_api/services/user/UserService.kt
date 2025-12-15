@@ -13,7 +13,9 @@ import kotlinx.coroutines.reactor.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import org.bson.types.ObjectId
 import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.time.LocalDate
@@ -234,9 +236,11 @@ class UserService(
      * Récupérer tous les utilisateurs paginés (pour l'admin).
      */
     suspend fun findAllUsers(pageable: org.springframework.data.domain.Pageable): Page<User> {
-        return userRepository.findAll(pageable)
+        val users = userRepository.findAll(pageable as Sort).collectList().awaitSingle()
+        val total = userRepository.count().awaitSingle()
+        return PageImpl(users, pageable, total)
     }
-    
+
     // Ajoute cette méthode
     suspend fun toDTO(user: User): UserDTO {
         // ⭐ Calculer les statistiques à la volée pour s'assurer qu'elles sont à jour
