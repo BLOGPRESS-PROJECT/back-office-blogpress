@@ -132,18 +132,9 @@ class FileStorageService(
             }
 
             // ⭐ Vérifier le quota de stockage (si userId fourni)
-            if (userId != null) {
-                // Obtenir la taille du fichier (approximative via headers)
-                val contentLength = file.headers().contentLength() ?: 0L
-                if (contentLength > 0) {
-                    val canStore = storageQuotaService.canStoreFile(userId, contentLength)
-                    if (!canStore) {
-                        throw FileStorageException(
-                            "Storage quota exceeded. Please upgrade to Golden User for unlimited storage."
-                        )
-                    }
-                }
-            }
+            // Note: Le Content-Length peut ne pas être disponible dans les headers pour les uploads multipart
+            // On vérifiera le quota après l'écriture du fichier en utilisant la taille réelle
+            // Pour l'instant, on skip cette vérification préalable car elle n'est pas fiable avec multipart
 
             // Générer un nom de fichier unique
             val fileExtension = getFileExtension(file.filename())

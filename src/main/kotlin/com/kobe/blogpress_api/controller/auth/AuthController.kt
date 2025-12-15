@@ -30,18 +30,29 @@ class AuthController(
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] Register request for email: ${registerRequest.email}")
 
-        val authResponse = authService.register(registerRequest)
-
-        logger.info("[$requestId] User registered successfully: ${authResponse.user.username}")
-        return ResponseEntity
-            .status(HttpStatus.CREATED)
-            .body(
-                ApiResponseDto.success(
-                    data = authResponse,
-                    message = "User registered successfully",
-                    requestId = requestId
+        return try {
+            val authResponse = authService.register(registerRequest)
+            logger.info("[$requestId] User registered successfully: ${authResponse.user.username}")
+            ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(
+                    ApiResponseDto.success(
+                        data = authResponse,
+                        message = "Inscription réussie",
+                        requestId = requestId
+                    )
                 )
-            )
+        } catch (e: com.kobe.blogpress_api.exception.ResourceAlreadyExistsException) {
+            logger.warn("[$requestId] Registration failed: ${e.message}")
+            ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(
+                    ApiResponseDto.error(
+                        message = e.message ?: "Cette ressource existe déjà",
+                        errorCode = "RESOURCE_ALREADY_EXISTS",
+                        requestId = requestId
+                    )
+                )
+        }
     }
 
     @PostMapping("/register", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
@@ -52,18 +63,29 @@ class AuthController(
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] Register request for email: ${registerRequest.email}")
 
-        val authResponse = authService.registerWithProfilePicture(registerRequest, profilePicture)
-
-        logger.info("[$requestId] User registered successfully: ${authResponse.user.username}")
-        return ResponseEntity
-            .status(HttpStatus.CREATED)
-            .body(
-                ApiResponseDto.success(
-                    data = authResponse,
-                    message = "User registered successfully",
-                    requestId = requestId
+        return try {
+            val authResponse = authService.registerWithProfilePicture(registerRequest, profilePicture)
+            logger.info("[$requestId] User registered successfully: ${authResponse.user.username}")
+            ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(
+                    ApiResponseDto.success(
+                        data = authResponse,
+                        message = "Inscription réussie",
+                        requestId = requestId
+                    )
                 )
-            )
+        } catch (e: com.kobe.blogpress_api.exception.ResourceAlreadyExistsException) {
+            logger.warn("[$requestId] Registration failed: ${e.message}")
+            ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(
+                    ApiResponseDto.error(
+                        message = e.message ?: "Cette ressource existe déjà",
+                        errorCode = "RESOURCE_ALREADY_EXISTS",
+                        requestId = requestId
+                    )
+                )
+        }
     }
 
     @PostMapping("/login")
@@ -73,16 +95,27 @@ class AuthController(
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] Login request for: ${loginRequest.emailOrUsername}")
 
-        val authResponse = authService.login(loginRequest)
-
-        logger.info("[$requestId] User logged in successfully: ${authResponse.user.username}")
-        return ResponseEntity.ok(
-            ApiResponseDto.success(
-                data = authResponse,
-                message = "Login successful",
-                requestId = requestId
+        return try {
+            val authResponse = authService.login(loginRequest)
+            logger.info("[$requestId] User logged in successfully: ${authResponse.user.username}")
+            ResponseEntity.ok(
+                ApiResponseDto.success(
+                    data = authResponse,
+                    message = "Connexion réussie",
+                    requestId = requestId
+                )
             )
-        )
+        } catch (e: com.kobe.blogpress_api.exception.AuthenticationException) {
+            logger.warn("[$requestId] Authentication failed: ${e.message}")
+            ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(
+                    ApiResponseDto.error(
+                        message = e.message ?: "Identifiants invalides",
+                        errorCode = "AUTHENTICATION_FAILED",
+                        requestId = requestId
+                    )
+                )
+        }
     }
 
     @PostMapping("/refresh")

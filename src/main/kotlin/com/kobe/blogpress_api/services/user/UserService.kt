@@ -29,6 +29,7 @@ class UserService(
     private val articleRepository: ArticleRepository,
     private val mongoTemplate: ReactiveMongoTemplate
 ) {
+    private val logger = org.slf4j.LoggerFactory.getLogger(UserService::class.java)
 
     suspend fun findById(userId: ObjectId): User {
         return userRepository.findById(userId).awaitSingleOrNull()
@@ -169,14 +170,7 @@ class UserService(
         val savedUser = userRepository.save(updatedUser).awaitSingle()
 
         // ⭐ Mettre à jour le quota de stockage pour qu'il soit illimité
-        try {
-            // Injection lazy pour éviter les dépendances circulaires
-            // Le StorageQuotaService sera injecté via @Lazy si nécessaire
-            // Pour l'instant, on laisse cette logique dans le contrôleur ou un service dédié
-        } catch (e: Exception) {
-            // Log mais ne pas faire échouer la promotion
-            logger.warn("Could not update storage quota for Golden User ${userId.toHexString()}: ${e.message}")
-        }
+        // Note: Cette logique est gérée dans AdminUserController pour éviter les dépendances circulaires
 
         return savedUser
     }
@@ -211,8 +205,30 @@ class UserService(
     }
 
     suspend fun searchUsers(query: String, page: Int, size: Int): Page<User> {
-        val regex = Regex(query, RegexOption.IGNORE_CASE)
-        return userRepository.findByUsernameOrEmailOrFullName(regex, PageRequest.of(page, size))
+        val pageable = PageRequest.of(page, size)
+        
+        // Construire la query avec recherche
+        val searchQuery = Query().apply {
+            addCriteria(
+                Criteria().orOperator(
+                    Criteria.where("username").regex(query, "i"),
+                    Criteria.where("email").regex(query, "i"),
+                    Criteria.where("fullName").regex(query, "i")
+                )
+            )
+        }
+        
+        // Query paginée pour les données
+        val dataQuery = Query.of(searchQuery).with(pageable)
+        val users = mongoTemplate.find(dataQuery, User::class.java)
+            .collectList()
+            .awaitSingle()
+        
+        // Query sans pagination pour le total
+        val countQuery = Query.of(searchQuery).limit(-1).skip(-1)
+        val total = mongoTemplate.count(countQuery, User::class.java).awaitSingle()
+        
+        return PageImpl(users, pageable, total)
     }
 
 
@@ -297,6 +313,75 @@ class UserService(
         val total = mongoTemplate.count(countQuery, User::class.java).awaitSingle()
 
         return PageImpl(users, pageable, total)
+    }
+
+    /**
+     * Désactiver un utilisateur (ADMIN seulement via routes /api/admin/**).
+     */
+    suspend fun deactivateUser(userId: ObjectId): User {
+        val user = findById(userId)
+        val updated = user.copy(isActive = false, updatedAt = Instant.now())
+        return userRepository.save(updated).awaitSingle()
+    }
+
+    /**
+     * Activer un utilisateur (ADMIN seulement via routes /api/admin/**).
+     */
+    suspend fun activateUser(userId: ObjectId): User {
+        val user = findById(userId)
+        val updated = user.copy(isActive = true, updatedAt = Instant.now())
+        return userRepository.save(updated).awaitSingle()
+    }
+
+    /**
+     * Supprimer un utilisateur (ADMIN).
+     * TODO: gérer la suppression/anonymisation des contenus associés si nécessaire.
+     */
+    suspend fun deleteUser(userId: ObjectId) {
+        val user = findById(userId)
+        userRepository.delete(user).awaitSingleOrNull()
+    }
+
+    /**
+     * Convertit un User en UserDTO avec statistiques calculées à la volée.
+     */
+    suspend fun toDTO(user: User): UserDTO {
+        // Calculer les statistiques à la volée pour s'assurer qu'elles sont à jour
+        val updatedStatistics = calculateUserStatistics(user.id)
+        
+        return UserDTO(
+            id = user.id.toHexString(),
+            username = user.username,
+            email = user.email,
+            firstName = user.firstName,
+            lastName = user.lastName,
+            fullName = "${user.firstName} ${user.lastName}",
+            birthDate = user.birthDate,
+            age = user.birthDate?.let { calculateAge(it) },
+            gender = user.gender,
+            isGoldenUser = user.isGoldenUser,
+            goldenUserSince = user.goldenUserSince,
+            country = user.country,
+            phoneNumber = user.phoneNumber,
+            interests = user.interests,
+            preferredLanguage = user.preferredLanguage,
+            profilePicture = user.profilePicture,
+            bio = user.bio,
+            website = user.website,
+            socialLinks = user.socialLinks,
+            role = user.role,
+            isEmailVerified = user.isEmailVerified,
+            statistics = updatedStatistics,
+            createdAt = user.createdAt,
+            lastLoginAt = user.lastLoginAt
+        )
+    }
+
+    /**
+     * Calcule l'âge à partir de la date de naissance.
+     */
+    private fun calculateAge(birthDate: LocalDate): Int {
+        return java.time.Period.between(birthDate, LocalDate.now()).years
     }
 
     /**

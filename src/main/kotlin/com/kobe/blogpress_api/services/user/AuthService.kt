@@ -109,7 +109,7 @@ class AuthService(
         val user = findUserByEmailOrUsername(loginRequest.emailOrUsername)
 
         if (!user.isActive) {
-            throw AuthenticationException("Account is deactivated")
+            throw AuthenticationException("Votre compte a été désactivé. Veuillez contacter le support pour plus d'informations.")
         }
 
         if (!passwordEncoder.matches(loginRequest.password, user.password)) {
@@ -166,12 +166,12 @@ class AuthService(
     private suspend fun checkUserExists(email: String, username: String) {
         val emailExists = userRepository.existsByEmail(email.lowercase()).awaitSingle()
         if (emailExists) {
-            throw ResourceAlreadyExistsException("Email already exists")
+            throw ResourceAlreadyExistsException("Cette adresse email est déjà utilisée. Veuillez utiliser une autre adresse email ou vous connecter.")
         }
 
         val usernameExists = userRepository.existsByUsername(username.lowercase()).awaitSingle()
         if (usernameExists) {
-            throw ResourceAlreadyExistsException("Username already exists")
+            throw ResourceAlreadyExistsException("Ce nom d'utilisateur est déjà pris. Veuillez choisir un autre nom d'utilisateur.")
         }
     }
 

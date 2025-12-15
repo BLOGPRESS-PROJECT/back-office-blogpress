@@ -44,7 +44,7 @@ class AnalyticsService(
         contentId: ObjectId,
         contentType: ContentAnalyticsType,
         periodDays: Int = 30
-    ): AdvancedAnalytics? {
+    ): AdvancedAnalytics {
         if (!canAccessAdvancedAnalytics(userId)) {
             throw IllegalAccessException("Advanced analytics are only available for Golden Users")
         }
@@ -52,10 +52,14 @@ class AnalyticsService(
         val periodEnd = Instant.now()
         val periodStart = periodEnd.minus(periodDays.toLong(), ChronoUnit.DAYS)
 
-        return analyticsRepository.findByUserIdAndContentIdAndContentType(userId, contentId, contentType)
+        val existing = analyticsRepository.findByUserIdAndContentIdAndContentType(userId, contentId, contentType)
             .awaitSingleOrNull()
-            ?.takeIf { it.periodStart.isAfter(periodStart) || it.periodStart.isBefore(periodStart) }
-            ?: createDefaultAnalytics(userId, contentId, contentType, periodStart, periodEnd)
+        
+        return if (existing != null && (existing.periodStart.isAfter(periodStart) || existing.periodStart.isBefore(periodStart))) {
+            existing
+        } else {
+            createDefaultAnalytics(userId, contentId, contentType, periodStart, periodEnd)
+        }
     }
 
     /**

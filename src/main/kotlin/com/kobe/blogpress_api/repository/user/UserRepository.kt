@@ -16,5 +16,6 @@ interface UserRepository : ReactiveMongoRepository<User, ObjectId> {
     fun findByUsername(username: String): Mono<User>
     fun existsByEmail(email: String): Mono<Boolean>
     fun existsByUsername(username: String): Mono<Boolean>
-    fun findByUsernameOrEmailOrFullName(regex: kotlin.text.Regex, of: org.springframework.data.domain.PageRequest): org.springframework.data.domain.Page<com.kobe.blogpress_api.domain.model.user.User>
+    // Note: findByUsernameOrEmailOrFullName a été supprimée car elle causait des problèmes de casting.
+    // Utiliser UserService.findAllUsers() ou UserService.searchUsers() à la place.
 }

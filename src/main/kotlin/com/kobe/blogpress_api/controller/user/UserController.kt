@@ -1,6 +1,6 @@
 package com.kobe.blogpress_api.controller.user
 
-import com.kobe.blogpress_api.domain.model.user.UserStatistics
+
 import com.kobe.blogpress_api.dto.common.ApiResponseDto
 import com.kobe.blogpress_api.dto.user.PrivacyPreferencesDTO
 import com.kobe.blogpress_api.dto.user.PublicUserDTO
