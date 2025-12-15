@@ -120,7 +120,7 @@ class AuthService(
         val updatedUser = user.copy(lastLoginAt = Instant.now())
         val savedUser = userRepository.save(updatedUser).awaitSingle()
 
-        return generateAuthResponse(savedUser)
+        return generateAuthResponse(savedUser, loginRequest.rememberMe)
     }
 
     suspend fun refreshToken(refreshToken: String): AuthResponseDTO {
@@ -140,12 +140,20 @@ class AuthService(
         val userId = jwtService.extractUserId(refreshToken)
         val user = userService.findById(userId)
 
-        return generateAuthResponse(user)
+        // On ne connaît pas explicitement rememberMe ici, mais il est encodé dans le token
+        // On peut le réutiliser pour garder un comportement cohérent
+        val claimsRememberMe = try {
+            (jwtService.extractAllClaimsInternal(refreshToken)["rememberMe"] as? Boolean) ?: false
+        } catch (e: Exception) {
+            false
+        }
+
+        return generateAuthResponse(user, claimsRememberMe)
     }
 
-    private suspend fun generateAuthResponse(user: User): AuthResponseDTO {
+    private suspend fun generateAuthResponse(user: User, rememberMe: Boolean = false): AuthResponseDTO {
         val accessToken = jwtService.generateAccessToken(user.id, user.email, user.role)
-        val refreshToken = jwtService.generateRefreshToken(user.id)
+        val refreshToken = jwtService.generateRefreshToken(user.id, rememberMe)
 
         return AuthResponseDTO(
             accessToken = accessToken,

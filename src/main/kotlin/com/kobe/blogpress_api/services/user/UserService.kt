@@ -229,6 +229,13 @@ class UserService(
             followingCount = user.following.size.toLong()
         )
     }
+
+    /**
+     * Récupérer tous les utilisateurs paginés (pour l'admin).
+     */
+    suspend fun findAllUsers(pageable: org.springframework.data.domain.Pageable): Page<User> {
+        return userRepository.findAll(pageable)
+    }
     
     // Ajoute cette méthode
     suspend fun toDTO(user: User): UserDTO {

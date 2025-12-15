@@ -8,5 +8,7 @@ import org.springframework.stereotype.Component
 data class JwtProperties(
     var secret: String = "",
     var accessTokenExpiration: Long = 3600000, // 1 heure
-    var refreshTokenExpiration: Long = 604800000 // 7 jours
+    var refreshTokenExpiration: Long = 604800000, // 7 jours
+    // Durée de vie étendue pour le refresh token quand "Rester connecté" est activé (ex: 30 jours)
+    var rememberMeRefreshTokenExpiration: Long = 2592000000 // 30 jours
 )

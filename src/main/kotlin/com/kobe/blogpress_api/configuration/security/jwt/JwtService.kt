@@ -34,13 +34,19 @@ class JwtService(
             .compact()
     }
 
-    fun generateRefreshToken(userId: ObjectId): String {
+    fun generateRefreshToken(userId: ObjectId, rememberMe: Boolean = false): String {
         val now = Instant.now()
-        val expiryDate = Date.from(now.plusMillis(jwtProperties.refreshTokenExpiration))
+        val expirationMillis = if (rememberMe) {
+            jwtProperties.rememberMeRefreshTokenExpiration
+        } else {
+            jwtProperties.refreshTokenExpiration
+        }
+        val expiryDate = Date.from(now.plusMillis(expirationMillis))
 
         return Jwts.builder()
             .subject(userId.toHexString())
             .claim("type", "REFRESH")
+            .claim("rememberMe", rememberMe)
             .issuedAt(Date.from(now))
             .expiration(expiryDate)
             .signWith(secretKey)
@@ -93,6 +99,12 @@ class JwtService(
             .parseSignedClaims(token)
             .payload
     }
+
+    /**
+     * Méthode interne exposée pour les services qui ont besoin d'accéder aux claims bruts.
+     * À utiliser avec précaution (ex: pour relire le flag rememberMe dans AuthService.refreshToken).
+     */
+    internal fun extractAllClaimsInternal(token: String): Claims = extractAllClaims(token)
 
     fun getAccessTokenExpiration(): Long = jwtProperties.accessTokenExpiration
 }

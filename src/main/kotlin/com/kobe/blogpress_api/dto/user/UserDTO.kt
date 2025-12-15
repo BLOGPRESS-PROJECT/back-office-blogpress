@@ -13,7 +13,10 @@ data class LoginRequestDTO(
     val emailOrUsername: String,
 
     @field:NotBlank(message = "Password is required")
-    val password: String
+    val password: String,
+
+    // Utilisé pour la fonctionnalité "Rester connecté"
+    val rememberMe: Boolean = false
 )
 
 data class AuthResponseDTO(
