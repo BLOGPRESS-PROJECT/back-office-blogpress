@@ -316,7 +316,7 @@ class UserService(
     }
 
     /**
-     * Désactiver un utilisateur (ADMIN seulement via routes /api/admin/**).
+     * Désactiver un utilisateur (ADMIN seulement via routes /api/admin).
      */
     suspend fun deactivateUser(userId: ObjectId): User {
         val user = findById(userId)
@@ -325,7 +325,7 @@ class UserService(
     }
 
     /**
-     * Activer un utilisateur (ADMIN seulement via routes /api/admin/**).
+     * Activer un utilisateur (ADMIN seulement via routes /api/admin).
      */
     suspend fun activateUser(userId: ObjectId): User {
         val user = findById(userId)
@@ -378,73 +378,8 @@ class UserService(
     }
 
     /**
-     * Calcule l'âge à partir de la date de naissance.
+     * Calcule l'age a partir de la date de naissance.
      */
-    private fun calculateAge(birthDate: LocalDate): Int {
-        return java.time.Period.between(birthDate, LocalDate.now()).years
-    }
-
-    /**
-     * Désactiver un utilisateur (ADMIN seulement via routes /api/admin/**).
-     */
-    suspend fun deactivateUser(userId: ObjectId): User {
-        val user = findById(userId)
-        val updated = user.copy(isActive = false, updatedAt = Instant.now())
-        return userRepository.save(updated).awaitSingle()
-    }
-
-    /**
-     * Activer un utilisateur (ADMIN seulement via routes /api/admin/**).
-     */
-    suspend fun activateUser(userId: ObjectId): User {
-        val user = findById(userId)
-        val updated = user.copy(isActive = true, updatedAt = Instant.now())
-        return userRepository.save(updated).awaitSingle()
-    }
-
-    /**
-     * Supprimer un utilisateur (ADMIN).
-     * TODO: gérer la suppression/anonymisation des contenus associés si nécessaire.
-     */
-    suspend fun deleteUser(userId: ObjectId) {
-        val user = findById(userId)
-        userRepository.delete(user).awaitSingleOrNull()
-    }
-
-    // Ajoute cette méthode
-    suspend fun toDTO(user: User): UserDTO {
-        // ⭐ Calculer les statistiques à la volée pour s'assurer qu'elles sont à jour
-        val updatedStatistics = calculateUserStatistics(user.id)
-        
-        return UserDTO(
-            id = user.id.toHexString(),
-            username = user.username,
-            email = user.email,
-            firstName = user.firstName,
-            lastName = user.lastName,
-            fullName = "${user.firstName} ${user.lastName}",
-            birthDate = user.birthDate,
-            age = user.birthDate?.let { calculateAge(it) },
-            gender = user.gender,
-            isGoldenUser = user.isGoldenUser,
-            goldenUserSince = user.goldenUserSince,
-            country = user.country,
-            phoneNumber = user.phoneNumber,
-            interests = user.interests,
-            preferredLanguage = user.preferredLanguage,
-            profilePicture = user.profilePicture,
-            bio = user.bio,
-            website = user.website,
-            socialLinks = user.socialLinks,
-            role = user.role,
-            isEmailVerified = user.isEmailVerified,
-            statistics = updatedStatistics, // ⭐ Utiliser les statistiques calculées
-            createdAt = user.createdAt,
-            lastLoginAt = user.lastLoginAt
-        )
-    }
-
-    // Ajoute cette méthode helper
     private fun calculateAge(birthDate: LocalDate): Int {
         return java.time.Period.between(birthDate, LocalDate.now()).years
     }

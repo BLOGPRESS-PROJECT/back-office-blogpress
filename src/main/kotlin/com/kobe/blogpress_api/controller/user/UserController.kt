@@ -10,9 +10,9 @@ import com.kobe.blogpress_api.exception.ResourceNotFoundException
 import com.kobe.blogpress_api.services.fileStorage.FileStorageService
 import com.kobe.blogpress_api.services.user.UserService
 import jakarta.validation.Valid
-import kotlinx.coroutines.flow.asFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import org.bson.types.ObjectId
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
@@ -336,9 +336,11 @@ class UserController(
         val users = userService.searchUsers(query, page, size)
         
         // ⭐ Convertir les utilisateurs en DTOs avec les statistiques calculées
-        val userDTOs = users.content.asFlow()
-            .map { userService.toDTO(it) }
-            .toList()
+        val userDTOs = coroutineScope {
+            users.content.map { user ->
+                async { userService.toDTO(user) }
+            }.awaitAll()
+        }
         
         // Créer une nouvelle Page avec les DTOs
         val pageDTOs = org.springframework.data.domain.PageImpl(
