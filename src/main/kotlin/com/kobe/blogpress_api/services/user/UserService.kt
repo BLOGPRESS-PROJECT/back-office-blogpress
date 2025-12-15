@@ -15,7 +15,6 @@ import org.bson.types.ObjectId
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
-import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.time.LocalDate
@@ -235,9 +234,19 @@ class UserService(
     /**
      * Récupérer tous les utilisateurs paginés (pour l'admin).
      */
-    suspend fun findAllUsers(pageable: org.springframework.data.domain.Pageable): Page<User> {
-        val users = userRepository.findAll(pageable as Sort).collectList().awaitSingle()
+    suspend fun findAllUsers(page: Int, size: Int): Page<User> {
+        val pageable = PageRequest.of(page, size)
+
+        // Compter le nombre total d'utilisateurs
         val total = userRepository.count().awaitSingle()
+
+        // Récupérer uniquement la page demandée à partir du Flux réactif
+        val users = userRepository.findAll()
+            .skip((page * size).toLong())
+            .take(size.toLong())
+            .collectList()
+            .awaitSingle()
+
         return PageImpl(users, pageable, total)
     }
 
