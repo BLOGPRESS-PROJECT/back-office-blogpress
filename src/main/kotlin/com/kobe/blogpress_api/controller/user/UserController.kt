@@ -90,9 +90,10 @@ class UserController(
                 id = user.id.toHexString(),
                 username = user.username,
                 fullName = "${user.firstName} ${user.lastName}",
-                profilePicture = user.profilePicture,
-                bio = user.bio,
+                avatarUrl = user.profilePicture,
                 isGoldenUser = user.isGoldenUser,
+                goldenUserSince = user.goldenUserSince,
+                createdAt = user.createdAt,
                 statistics = user.statistics
             )
 
@@ -367,9 +368,10 @@ class UserController(
             id = user.id.toHexString(),
             username = user.username,
             fullName = "${user.firstName} ${user.lastName}",
-            profilePicture = user.profilePicture,
-            bio = user.bio,
+            avatarUrl = user.profilePicture,
             isGoldenUser = user.isGoldenUser,
+            goldenUserSince = user.goldenUserSince,
+            createdAt = user.createdAt,
             statistics = user.statistics
         )
         return ResponseEntity.ok(

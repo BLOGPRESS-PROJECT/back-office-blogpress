@@ -29,8 +29,6 @@ import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.stereotype.Service
 import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneId
 
 @Service
 class FeedService(
@@ -236,19 +234,19 @@ class FeedService(
             null
         }
 
-        // Déterminer la date de publication selon la logique recommandée
-        val publishAt: LocalDateTime? = when {
+        // Déterminer la date de publication selon la logique recommandée (Instant UTC)
+        val publishAt: Instant? = when {
             // Si l'article est publié et a une date de publication programmée
             article.isPublished && article.publishAt != null -> {
-                LocalDateTime.ofInstant(article.publishAt, ZoneId.systemDefault())
+                article.publishAt
             }
             // Si l'article est publié mais n'a pas de date programmée (publication immédiate)
             article.isPublished && article.publishAt == null -> {
-                LocalDateTime.ofInstant(article.createdAt, ZoneId.systemDefault())
+                article.createdAt
             }
             // Si l'article n'est pas encore publié mais a une date programmée
             !article.isPublished && article.publishAt != null -> {
-                LocalDateTime.ofInstant(article.publishAt, ZoneId.systemDefault())
+                article.publishAt
             }
             // Sinon, null (article non publié et non programmé)
             else -> null
@@ -263,7 +261,7 @@ class FeedService(
             title = article.title,
             excerpt = excerpt,
             coverImageUrl = coverImageUrl,
-            createdAt = LocalDateTime.ofInstant(article.createdAt, ZoneId.systemDefault()),
+            createdAt = article.createdAt,
             publishAt = publishAt, // ⭐ NOUVEAU : Date de publication
             url = url,
             authorName = author.fullName,

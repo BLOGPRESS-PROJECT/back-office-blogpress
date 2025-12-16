@@ -373,7 +373,28 @@ class UserService(
             isEmailVerified = user.isEmailVerified,
             statistics = updatedStatistics,
             createdAt = user.createdAt,
+            updatedAt = user.updatedAt,
             lastLoginAt = user.lastLoginAt
+        )
+    }
+
+    /**
+     * Mapping léger pour la liste admin des utilisateurs.
+     */
+    suspend fun toAdminListItemDTO(user: User): com.kobe.blogpress_api.dto.user.AdminUserListItemDTO {
+        val stats = calculateUserStatistics(user.id)
+        return com.kobe.blogpress_api.dto.user.AdminUserListItemDTO(
+            id = user.id.toHexString(),
+            username = user.username,
+            email = user.email,
+            fullName = "${user.firstName} ${user.lastName}",
+            role = user.role,
+            isActive = user.isActive,
+            isGoldenUser = user.isGoldenUser,
+            goldenUserSince = user.goldenUserSince,
+            createdAt = user.createdAt,
+            lastLoginAt = user.lastLoginAt,
+            statistics = stats
         )
     }
 

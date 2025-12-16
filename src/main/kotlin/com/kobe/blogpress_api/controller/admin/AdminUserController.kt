@@ -1,7 +1,7 @@
 package com.kobe.blogpress_api.controller.admin
 
 import com.kobe.blogpress_api.dto.common.ApiResponseDto
-import com.kobe.blogpress_api.dto.user.UserDTO
+import com.kobe.blogpress_api.dto.user.AdminUserListItemDTO
 import com.kobe.blogpress_api.services.storage.StorageQuotaService
 import com.kobe.blogpress_api.services.user.UserService
 import kotlinx.coroutines.async
@@ -44,7 +44,7 @@ class AdminUserController(
         @RequestParam(required = false) role: String?,       // "ADMIN", "USER", "MODERATOR"
         @RequestParam(required = false) isGolden: Boolean?,  // true / false / null
         @RequestParam(required = false) isActive: Boolean?   // true / false / null
-    ): ResponseEntity<ApiResponseDto<Page<UserDTO>>> {
+    ): ResponseEntity<ApiResponseDto<Page<AdminUserListItemDTO>>> {
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] Admin list users - page=$page, size=$size, search=$search, role=$role, isGolden=$isGolden, isActive=$isActive")
 
@@ -57,14 +57,14 @@ class AdminUserController(
             isActive = isActive
         )
 
-        // Mapper en UserDTO (avec stats à jour) via coroutines
+        // Mapper en AdminUserListItemDTO (avec stats à jour) via coroutines
         val dtoContent = coroutineScope {
             usersPage.content.map { user ->
-                async { userService.toDTO(user) }
+                async { userService.toAdminListItemDTO(user) }
             }.awaitAll()
         }
 
-        val dtoPage: Page<UserDTO> = PageImpl(
+        val dtoPage: Page<AdminUserListItemDTO> = PageImpl(
             dtoContent,
             usersPage.pageable,
             usersPage.totalElements

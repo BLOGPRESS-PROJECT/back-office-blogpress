@@ -2,8 +2,6 @@ package com.kobe.blogpress_api.dto.user
 
 import com.kobe.blogpress_api.domain.model.user.Gender
 import com.kobe.blogpress_api.domain.model.user.Role
-import com.kobe.blogpress_api.domain.model.user.SocialLinks
-import com.kobe.blogpress_api.domain.model.user.UserStatistics
 import jakarta.validation.constraints.NotBlank
 import java.time.Instant
 import java.time.LocalDate
@@ -49,11 +47,12 @@ data class UserDTO(
     val profilePicture: String? = null,
     val bio: String? = null,
     val website: String? = null,
-    val socialLinks: SocialLinks,
+    val socialLinks: com.kobe.blogpress_api.domain.model.user.SocialLinks,
     val role: Role,
     val isEmailVerified: Boolean,
-    val statistics: UserStatistics,
+    val statistics: com.kobe.blogpress_api.domain.model.user.UserStatistics,
     val createdAt: Instant,
+    val updatedAt: Instant?,
     val lastLoginAt: Instant? = null
 )
 
@@ -64,11 +63,12 @@ data class RefreshTokenRequestDTO(
 data class PublicUserDTO(
     val id: String,
     val username: String,
-    val fullName: String,
-    val profilePicture: String?,
-    val bio: String?,
+    val fullName: String?,
+    val avatarUrl: String?,
     val isGoldenUser: Boolean,
-    val statistics: UserStatistics
+    val goldenUserSince: Instant?,
+    val createdAt: Instant,
+    val statistics: com.kobe.blogpress_api.domain.model.user.UserStatistics?
 )
 
 data class PrivacyPreferencesDTO(

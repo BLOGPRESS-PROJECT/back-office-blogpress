@@ -1,7 +1,7 @@
 package com.kobe.blogpress_api.dto.feed
 
 import com.kobe.blogpress_api.domain.model.article.ArticleType
-import java.time.LocalDateTime
+import java.time.Instant
 
 /**
  * DTO pour un article dans le feed principal.
@@ -23,9 +23,9 @@ data class FeedItemDto(
     val excerpt: String,         // Extrait de l'article (premiers caractères du contenu)
     val coverImageUrl: String?,  // URL de l'image de couverture (même convention que ArticleResponse)
 
-    // Dates
-    val createdAt: LocalDateTime, // Date de création
-    val publishAt: LocalDateTime?, // ⭐ Date de publication (nullable)
+    // Dates (ISO-8601 UTC)
+    val createdAt: Instant,        // Date de création réelle (Instant)
+    val publishAt: Instant?,       // ⭐ Date de publication (nullable, Instant)
 
     // Navigation interne (optionnelle pour le frontend)
     val url: String?,             // URL relative "SEO" optionnelle
