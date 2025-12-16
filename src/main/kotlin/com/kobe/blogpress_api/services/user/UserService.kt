@@ -502,7 +502,7 @@ class UserService(
             "totalCreated" to users.size,
             "goldenUsersCreated" to goldenCount,
             "createdUserIds" to createdUsers,
-            "message" to "Batch user creation completed"
+            "message" to "Batch user creation completed",
         )
     }
 }
