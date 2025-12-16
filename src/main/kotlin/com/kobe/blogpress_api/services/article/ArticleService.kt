@@ -5,6 +5,7 @@ import com.kobe.blogpress_api.domain.model.article.ArticleType
 import com.kobe.blogpress_api.dto.article.ArticleResponse
 import com.kobe.blogpress_api.dto.article.ArticleStats
 import com.kobe.blogpress_api.dto.article.ArticleSummaryDto
+import com.kobe.blogpress_api.dto.article.BatchCreateArticlesRequestDTO
 import com.kobe.blogpress_api.dto.article.CreateArticleRequest
 import com.kobe.blogpress_api.dto.article.CreateBlogPostRequest
 import com.kobe.blogpress_api.dto.article.UpdateArticleRequest
@@ -12,6 +13,9 @@ import com.kobe.blogpress_api.exception.ContentNotYetPublishedException
 import com.kobe.blogpress_api.exception.ResourceNotFoundException
 import com.kobe.blogpress_api.repository.article.ArticleRepository
 import com.kobe.blogpress_api.repository.blog.BlogRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.reactive.asFlow
@@ -26,6 +30,7 @@ import org.springframework.data.mongodb.core.query.Query
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.util.Random
 import java.util.UUID
 
 @Service
@@ -556,6 +561,106 @@ class ArticleService(
                 shareCount = article.shareCount,
                 favoriteCount = article.favoriteCount
             )
+        )
+    }
+
+    /**
+     * Créer plusieurs articles simples en batch pour les tests.
+     */
+    suspend fun batchCreateArticles(request: BatchCreateArticlesRequestDTO, authorId: ObjectId): Map<String, Any> = coroutineScope {
+        val random = Random()
+        val categories = listOf("Technologie", "Voyage", "Cuisine", "Sport", "Culture", "Science", "Art", "Lifestyle", "Business", "Santé")
+        val tagsList = listOf(
+            listOf("Tech", "Innovation"),
+            listOf("Voyage", "Aventure"),
+            listOf("Cuisine", "Recettes"),
+            listOf("Sport", "Fitness"),
+            listOf("Culture", "Histoire"),
+            listOf("Science", "Recherche"),
+            listOf("Art", "Design"),
+            listOf("Lifestyle", "Bien-être"),
+            listOf("Business", "Entrepreneuriat"),
+            listOf("Santé", "Médecine")
+        )
+        val contentTemplates = listOf(
+            "<p>Cet article explore les dernières tendances dans le domaine de la technologie. Nous allons examiner comment les innovations récentes transforment notre quotidien.</p><p>Les développements technologiques continuent d'évoluer à un rythme rapide, offrant de nouvelles opportunités et défis.</p>",
+            "<p>Découvrez les plus beaux endroits à visiter cette année. Ce guide vous emmène à travers des destinations incroyables qui valent vraiment le détour.</p><p>Chaque destination a son charme unique et offre des expériences mémorables pour les voyageurs.</p>",
+            "<p>Apprenez à préparer des plats délicieux avec ces recettes faciles à suivre. La cuisine est un art qui se perfectionne avec la pratique.</p><p>Ces recettes sont parfaites pour les débutants comme pour les cuisiniers expérimentés.</p>",
+            "<p>Découvrez les meilleurs exercices pour rester en forme et améliorer votre santé. Le sport est essentiel pour un mode de vie équilibré.</p><p>Intégrer une routine d'exercice régulière peut transformer votre bien-être physique et mental.</p>",
+            "<p>Explorez les richesses culturelles et historiques qui façonnent notre monde. La culture est le reflet de notre humanité.</p><p>Chaque culture apporte une perspective unique et enrichissante à notre compréhension du monde.</p>"
+        )
+
+        val timestamp = System.currentTimeMillis()
+        val createdArticles = mutableListOf<String>()
+        var publishedCount = 0
+        var privateCount = 0
+        var scheduledCount = 0
+
+        val articles = (1..request.count).map { index ->
+            async {
+                val title = "${request.titlePrefix} ${index}"
+                val category = categories[random.nextInt(categories.size)]
+                val tags = tagsList[random.nextInt(tagsList.size)]
+                val content = contentTemplates[random.nextInt(contentTemplates.size)]
+                val excerpt = "Résumé de l'article ${index}: ${content.replace(Regex("<[^>]*>"), " ").take(150)}..."
+
+                // Déterminer si l'article sera publié
+                val isPublished = if (request.publishSome) {
+                    (random.nextInt(100) < request.publishedPercentage)
+                } else {
+                    false
+                }
+
+                // Déterminer si l'article sera privé
+                val isPrivate = if (request.makeSomePrivate) {
+                    (random.nextInt(100) < request.privatePercentage)
+                } else {
+                    false
+                }
+
+                // Déterminer si l'article aura une date de publication programmée
+                val publishAt: Instant? = if (request.scheduleSome && (random.nextInt(100) < request.scheduledPercentage)) {
+                    // Programmer pour dans 1 à 30 jours
+                    Instant.now().plusSeconds((1 + random.nextInt(30)) * 24 * 60 * 60L)
+                } else {
+                    null
+                }
+
+                val createRequest = CreateArticleRequest(
+                    title = title,
+                    content = content,
+                    excerpt = excerpt,
+                    coverImageUrl = null,
+                    tags = tags,
+                    category = category,
+                    isPublished = isPublished,
+                    isPrivate = isPrivate,
+                    publishAt = publishAt
+                )
+
+                try {
+                    val article = createSimpleArticle(createRequest, authorId)
+                    createdArticles.add(article.id)
+                    if (isPublished) publishedCount++
+                    if (isPrivate) privateCount++
+                    if (publishAt != null) scheduledCount++
+                    logger.info("Created test article: ${article.title} (Published: $isPublished, Private: $isPrivate)")
+                    article
+                } catch (e: Exception) {
+                    logger.warn("Failed to create article $title: ${e.message}")
+                    null
+                }
+            }
+        }.awaitAll().filterNotNull()
+
+        mapOf(
+            "totalRequested" to request.count,
+            "totalCreated" to articles.size,
+            "publishedArticles" to publishedCount,
+            "privateArticles" to privateCount,
+            "scheduledArticles" to scheduledCount,
+            "createdArticleIds" to createdArticles,
+            "message" to "Batch article creation completed"
         )
     }
 }

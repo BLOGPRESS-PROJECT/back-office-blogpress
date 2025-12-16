@@ -3,6 +3,7 @@ package com.kobe.blogpress_api.controller.article
 import com.kobe.blogpress_api.domain.model.article.ArticleType
 import com.kobe.blogpress_api.dto.article.ArticleResponse
 import com.kobe.blogpress_api.dto.article.ArticleSummaryDto
+import com.kobe.blogpress_api.dto.article.BatchCreateArticlesRequestDTO
 import com.kobe.blogpress_api.dto.article.CreateArticleRequest
 import com.kobe.blogpress_api.dto.article.CreateBlogPostRequest
 import com.kobe.blogpress_api.dto.article.UpdateArticleRequest
@@ -338,5 +339,31 @@ class ArticleController(
                 requestId = requestId
             )
         ) as ResponseEntity<ApiResponseDto<Nothing>>
+    }
+
+    /**
+     * Créer plusieurs articles simples en batch (pour les tests).
+     *
+     * POST /api/articles/batch-create
+     */
+    @PostMapping("/batch-create")
+    suspend fun batchCreateArticles(
+        @AuthenticationPrincipal userId: String,
+        @Valid @RequestBody request: BatchCreateArticlesRequestDTO
+    ): ResponseEntity<ApiResponseDto<Map<String, Any>>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] User $userId creating ${request.count} articles in batch")
+
+        val result = articleService.batchCreateArticles(request, ObjectId(userId))
+
+        return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(
+                ApiResponseDto.success(
+                    data = result,
+                    message = "${request.count} articles created successfully",
+                    requestId = requestId
+                )
+            )
     }
 }
