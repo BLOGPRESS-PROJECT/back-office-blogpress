@@ -2,9 +2,11 @@ package com.kobe.blogpress_api.controller.admin
 
 import com.kobe.blogpress_api.dto.common.ApiResponseDto
 import com.kobe.blogpress_api.dto.user.AdminUserListItemDTO
+import com.kobe.blogpress_api.dto.user.BatchCreateUsersRequestDTO
 import com.kobe.blogpress_api.dto.user.UserDTO
 import com.kobe.blogpress_api.services.storage.StorageQuotaService
 import com.kobe.blogpress_api.services.user.UserService
+import jakarta.validation.Valid
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -214,6 +216,30 @@ class AdminUserController(
             ApiResponseDto.success(
                 data = Unit,
                 message = "User deleted successfully",
+                requestId = requestId
+            )
+        )
+    }
+
+    /**
+     * Créer plusieurs utilisateurs en batch (pour les tests).
+     *
+     * POST /api/admin/users/batch-create
+     */
+    @PostMapping("/batch-create")
+    suspend fun batchCreateUsers(
+        @AuthenticationPrincipal adminId: String,
+        @Valid @RequestBody request: BatchCreateUsersRequestDTO
+    ): ResponseEntity<ApiResponseDto<Map<String, Any>>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] Admin $adminId creating ${request.count} users in batch")
+
+        val result = userService.batchCreateUsers(request)
+
+        return ResponseEntity.ok(
+            ApiResponseDto.success(
+                data = result,
+                message = "${request.count} users created successfully",
                 requestId = requestId
             )
         )

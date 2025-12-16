@@ -1,7 +1,10 @@
 package com.kobe.blogpress_api.services.user
 
+import com.kobe.blogpress_api.domain.model.user.Gender
 import com.kobe.blogpress_api.domain.model.user.Role
+import com.kobe.blogpress_api.domain.model.user.SocialLinks
 import com.kobe.blogpress_api.domain.model.user.User
+import com.kobe.blogpress_api.dto.user.BatchCreateUsersRequestDTO
 import com.kobe.blogpress_api.dto.user.PrivacyPreferencesDTO
 import com.kobe.blogpress_api.dto.user.UpdateProfileRequestDTO
 import com.kobe.blogpress_api.dto.user.UserDTO
@@ -12,22 +15,28 @@ import com.kobe.blogpress_api.repository.user.UserRepository
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.reactor.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import org.bson.types.ObjectId
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
+import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.time.LocalDate
+import java.util.Random
 
 @Service
 class UserService(
     private val userRepository: UserRepository,
     private val blogRepository: BlogRepository,
     private val articleRepository: ArticleRepository,
-    private val mongoTemplate: ReactiveMongoTemplate
+    private val mongoTemplate: ReactiveMongoTemplate,
+    private val passwordEncoder: PasswordEncoder
 ) {
     private val logger = org.slf4j.LoggerFactory.getLogger(UserService::class.java)
 
@@ -403,5 +412,97 @@ class UserService(
      */
     private fun calculateAge(birthDate: LocalDate): Int {
         return java.time.Period.between(birthDate, LocalDate.now()).years
+    }
+
+    /**
+     * Créer plusieurs utilisateurs en batch pour les tests.
+     */
+    suspend fun batchCreateUsers(request: BatchCreateUsersRequestDTO): Map<String, Any> = coroutineScope {
+        val random = Random()
+        val firstNames = listOf(
+            "Alexandre", "Marie", "Thomas", "Sophie", "Lucas", "Emma", "Hugo", "Léa",
+            "Louis", "Chloé", "Antoine", "Camille", "Pierre", "Julie", "Nicolas", "Sarah",
+            "Maxime", "Laura", "Julien", "Manon", "Paul", "Clara", "Baptiste", "Inès",
+            "Romain", "Élise", "Vincent", "Anaïs", "Matthieu", "Marion", "Benjamin", "Lucie"
+        )
+        val lastNames = listOf(
+            "Martin", "Bernard", "Dubois", "Thomas", "Robert", "Richard", "Petit", "Durand",
+            "Leroy", "Moreau", "Simon", "Laurent", "Lefebvre", "Michel", "Garcia", "David",
+            "Bertrand", "Roux", "Vincent", "Fournier", "Morel", "Girard", "André", "Lefevre",
+            "Mercier", "Dupont", "Lambert", "Bonnet", "François", "Martinez", "Legrand", "Garnier"
+        )
+        val countries = listOf("France", "Belgique", "Suisse", "Canada", "Maroc", "Sénégal", "Côte d'Ivoire", "Algérie")
+        val interestsList = listOf(
+            listOf("Technologie", "Programmation"),
+            listOf("Voyage", "Photographie"),
+            listOf("Musique", "Cinéma"),
+            listOf("Sport", "Fitness"),
+            listOf("Lecture", "Écriture"),
+            listOf("Cuisine", "Gastronomie"),
+            listOf("Art", "Design"),
+            listOf("Science", "Recherche")
+        )
+
+        val timestamp = System.currentTimeMillis()
+        val createdUsers = mutableListOf<String>()
+        var goldenCount = 0
+
+        val users = (1..request.count).map { index ->
+            async {
+                val firstName = firstNames[random.nextInt(firstNames.size)]
+                val lastName = lastNames[random.nextInt(lastNames.size)]
+                val username = "testuser${timestamp}_$index"
+                val email = "testuser${timestamp}_$index@example.com"
+                val password = "${request.passwordPrefix}${index}!"
+
+                // Déterminer si l'utilisateur sera Golden
+                val isGolden = if (request.makeSomeGolden) {
+                    (random.nextInt(100) < request.goldenPercentage)
+                } else {
+                    false
+                }
+
+                val user = User(
+                    username = username.lowercase(),
+                    email = email.lowercase(),
+                    password = passwordEncoder.encode(password),
+                    firstName = firstName,
+                    lastName = lastName,
+                    birthDate = LocalDate.of(
+                        1990 + random.nextInt(30),
+                        1 + random.nextInt(12),
+                        1 + random.nextInt(28)
+                    ),
+                    gender = Gender.values()[random.nextInt(Gender.values().size)],
+                    country = countries[random.nextInt(countries.size)],
+                    phoneNumber = "+336${String.format("%08d", random.nextInt(100000000))}",
+                    interests = interestsList[random.nextInt(interestsList.size)],
+                    preferredLanguage = listOf("fr", "en", "es")[random.nextInt(3)],
+                    bio = "Utilisateur de test créé automatiquement - Index: $index",
+                    role = Role.USER,
+                    isGoldenUser = isGolden,
+                    goldenUserSince = if (isGolden) Instant.now() else null
+                )
+
+                try {
+                    val savedUser = userRepository.save(user).awaitSingle()
+                    createdUsers.add(savedUser.id.toHexString())
+                    if (isGolden) goldenCount++
+                    logger.info("Created test user: ${savedUser.username} (Golden: $isGolden)")
+                    savedUser
+                } catch (e: Exception) {
+                    logger.warn("Failed to create user $username: ${e.message}")
+                    null
+                }
+            }
+        }.awaitAll().filterNotNull()
+
+        mapOf(
+            "totalRequested" to request.count,
+            "totalCreated" to users.size,
+            "goldenUsersCreated" to goldenCount,
+            "createdUserIds" to createdUsers,
+            "message" to "Batch user creation completed"
+        )
     }
 }
