@@ -381,16 +381,28 @@ class ArticleController(
         val requestId = UUID.randomUUID().toString()
         logger.info("[$requestId] User $userId creating ${request.postsPerBlog} posts per blog for ${request.blogIds.size} blogs")
 
-        val result = articleService.batchCreateBlogPosts(request, ObjectId(userId))
+        return try {
+            val result = articleService.batchCreateBlogPosts(request, ObjectId(userId))
 
-        return ResponseEntity
-            .status(HttpStatus.CREATED)
-            .body(
-                ApiResponseDto.success(
-                    data = result,
-                    message = "Blog posts created successfully",
-                    requestId = requestId
+            ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(
+                    ApiResponseDto.success(
+                        data = result,
+                        message = "Blog posts created successfully",
+                        requestId = requestId
+                    )
                 )
-            )
+        } catch (e: Exception) {
+            logger.error("[$requestId] Error creating blog posts in batch", e)
+            ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(
+                    ApiResponseDto.error(
+                        message = "Error creating blog posts: ${e.message}",
+                        requestId = requestId
+                    )
+                )
+        }
     }
 }
