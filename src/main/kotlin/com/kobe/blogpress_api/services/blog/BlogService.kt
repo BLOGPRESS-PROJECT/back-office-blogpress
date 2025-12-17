@@ -1,6 +1,7 @@
 package com.kobe.blogpress_api.services.blog
 
 import com.kobe.blogpress_api.domain.model.blog.Blog
+import com.kobe.blogpress_api.dto.blog.BatchCreateBlogsRequestDTO
 import com.kobe.blogpress_api.dto.blog.BlogGlobalStatsResponse
 import com.kobe.blogpress_api.dto.blog.BlogResponse
 import com.kobe.blogpress_api.dto.blog.BlogStats
@@ -22,6 +23,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.reactor.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
+import java.util.Random
 import reactor.core.publisher.Flux
 import org.bson.types.ObjectId
 import org.slf4j.LoggerFactory
@@ -785,6 +787,103 @@ class BlogService(
                 shareCount = blog.shareCount,
                 favoriteCount = blog.favoriteCount
             )
+        )
+    }
+
+    /**
+     * Créer plusieurs blogs en batch pour les tests.
+     */
+    suspend fun batchCreateBlogs(request: BatchCreateBlogsRequestDTO, authorId: ObjectId): Map<String, Any> = coroutineScope {
+        val random = Random()
+        val descriptions = listOf(
+            "Un blog passionnant qui explore les dernières tendances et innovations dans différents domaines.",
+            "Découvrez des articles de qualité sur des sujets variés, de la technologie à la culture.",
+            "Un espace dédié au partage de connaissances et d'expériences enrichissantes.",
+            "Explorez le monde à travers nos articles soigneusement rédigés et documentés.",
+            "Un blog qui vous inspire et vous informe sur les sujets qui comptent vraiment.",
+            "Partagez nos réflexions et découvertes sur des thèmes passionnants et actuels.",
+            "Un blog créatif qui mélange art, culture et innovation pour votre plaisir.",
+            "Découvrez des contenus originaux et pertinents sur des sujets qui vous intéressent."
+        )
+        val tagsList = listOf(
+            listOf("Technologie", "Innovation", "Digital"),
+            listOf("Voyage", "Aventure", "Découverte"),
+            listOf("Culture", "Art", "Histoire"),
+            listOf("Lifestyle", "Bien-être", "Santé"),
+            listOf("Business", "Entrepreneuriat", "Finance"),
+            listOf("Science", "Recherche", "Éducation"),
+            listOf("Cuisine", "Gastronomie", "Recettes"),
+            listOf("Sport", "Fitness", "Santé")
+        )
+
+        val timestamp = System.currentTimeMillis()
+        val createdBlogs = mutableListOf<String>()
+        var publishedCount = 0
+        var privateCount = 0
+        var scheduledCount = 0
+
+        val blogs = (1..request.count).map { index ->
+            async {
+                val title = "${request.titlePrefix} ${index}"
+                val description = descriptions[random.nextInt(descriptions.size)]
+                val tags = tagsList[random.nextInt(tagsList.size)]
+
+                // Déterminer si le blog sera publié
+                val isPublished = if (request.publishSome) {
+                    (random.nextInt(100) < request.publishedPercentage)
+                } else {
+                    false
+                }
+
+                // Déterminer si le blog sera privé
+                val isPrivate = if (request.makeSomePrivate) {
+                    (random.nextInt(100) < request.privatePercentage)
+                } else {
+                    false
+                }
+
+                // Déterminer si le blog aura une date de publication programmée
+                val publishAt: Instant? = if (request.scheduleSome && (random.nextInt(100) < request.scheduledPercentage)) {
+                    // Programmer pour dans 1 à 30 jours
+                    Instant.now().plusSeconds((1 + random.nextInt(30)) * 24 * 60 * 60L)
+                } else {
+                    null
+                }
+
+                val createRequest = CreateBlogRequest(
+                    title = title,
+                    description = description,
+                    tags = tags,
+                    logoImageUrl = null,
+                    coverImageUrl = null,
+                    isPublished = isPublished,
+                    isPrivate = isPrivate,
+                    publishAt = publishAt
+                )
+
+                try {
+                    val blog = createBlog(createRequest, authorId)
+                    createdBlogs.add(blog.id)
+                    if (isPublished) publishedCount++
+                    if (isPrivate) privateCount++
+                    if (publishAt != null) scheduledCount++
+                    logger.info("Created test blog: ${blog.title} (Published: $isPublished, Private: $isPrivate)")
+                    blog
+                } catch (e: Exception) {
+                    logger.warn("Failed to create blog $title: ${e.message}")
+                    null
+                }
+            }
+        }.awaitAll().filterNotNull()
+
+        mapOf(
+            "totalRequested" to request.count,
+            "totalCreated" to blogs.size,
+            "publishedBlogs" to publishedCount,
+            "privateBlogs" to privateCount,
+            "scheduledBlogs" to scheduledCount,
+            "createdBlogIds" to createdBlogs,
+            "message" to "Batch blog creation completed"
         )
     }
 

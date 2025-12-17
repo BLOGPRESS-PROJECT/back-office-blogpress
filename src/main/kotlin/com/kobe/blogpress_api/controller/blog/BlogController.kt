@@ -1,6 +1,7 @@
 package com.kobe.blogpress_api.controller.blog
 
 import com.kobe.blogpress_api.dto.article.ArticleSummaryDto
+import com.kobe.blogpress_api.dto.blog.BatchCreateBlogsRequestDTO
 import com.kobe.blogpress_api.dto.blog.BlogGlobalStatsResponse
 import com.kobe.blogpress_api.dto.blog.BlogResponse
 import com.kobe.blogpress_api.dto.blog.BlogStats
@@ -413,5 +414,31 @@ class BlogController(
                 requestId = requestId
             )
         )
+    }
+
+    /**
+     * Créer plusieurs blogs en batch (pour les tests).
+     *
+     * POST /api/blogs/batch-create
+     */
+    @PostMapping("/batch-create")
+    suspend fun batchCreateBlogs(
+        @AuthenticationPrincipal userId: String,
+        @Valid @RequestBody request: BatchCreateBlogsRequestDTO
+    ): ResponseEntity<ApiResponseDto<Map<String, Any>>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] User $userId creating ${request.count} blogs in batch")
+
+        val result = blogService.batchCreateBlogs(request, ObjectId(userId))
+
+        return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(
+                ApiResponseDto.success(
+                    data = result,
+                    message = "${request.count} blogs created successfully",
+                    requestId = requestId
+                )
+            )
     }
 }
