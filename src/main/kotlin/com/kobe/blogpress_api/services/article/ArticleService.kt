@@ -6,6 +6,7 @@ import com.kobe.blogpress_api.dto.article.ArticleResponse
 import com.kobe.blogpress_api.dto.article.ArticleStats
 import com.kobe.blogpress_api.dto.article.ArticleSummaryDto
 import com.kobe.blogpress_api.dto.article.BatchCreateArticlesRequestDTO
+import com.kobe.blogpress_api.dto.article.BatchCreateBlogPostsRequestDTO
 import com.kobe.blogpress_api.dto.article.CreateArticleRequest
 import com.kobe.blogpress_api.dto.article.CreateBlogPostRequest
 import com.kobe.blogpress_api.dto.article.UpdateArticleRequest
@@ -661,6 +662,144 @@ class ArticleService(
             "scheduledArticles" to scheduledCount,
             "createdArticleIds" to createdArticles,
             "message" to "Batch article creation completed"
+        )
+    }
+
+    /**
+     * Créer plusieurs articles de blog (blog posts) pour des blogs spécifiques en batch.
+     */
+    suspend fun batchCreateBlogPosts(request: BatchCreateBlogPostsRequestDTO, authorId: ObjectId): Map<String, Any> = coroutineScope {
+        val random = Random()
+        val categories = listOf("Technologie", "Voyage", "Cuisine", "Sport", "Culture", "Science", "Art", "Lifestyle", "Business", "Santé")
+        val tagsList = listOf(
+            listOf("Tech", "Innovation"),
+            listOf("Voyage", "Aventure"),
+            listOf("Cuisine", "Recettes"),
+            listOf("Sport", "Fitness"),
+            listOf("Culture", "Histoire"),
+            listOf("Science", "Recherche"),
+            listOf("Art", "Design"),
+            listOf("Lifestyle", "Bien-être"),
+            listOf("Business", "Entrepreneuriat"),
+            listOf("Santé", "Médecine")
+        )
+        val contentTemplates = listOf(
+            "<p>Cet article explore les dernières tendances dans le domaine de la technologie. Nous allons examiner comment les innovations récentes transforment notre quotidien.</p><p>Les développements technologiques continuent d'évoluer à un rythme rapide, offrant de nouvelles opportunités et défis.</p>",
+            "<p>Découvrez les plus beaux endroits à visiter cette année. Ce guide vous emmène à travers des destinations incroyables qui valent vraiment le détour.</p><p>Chaque destination a son charme unique et offre des expériences mémorables pour les voyageurs.</p>",
+            "<p>Apprenez à préparer des plats délicieux avec ces recettes faciles à suivre. La cuisine est un art qui se perfectionne avec la pratique.</p><p>Ces recettes sont parfaites pour les débutants comme pour les cuisiniers expérimentés.</p>",
+            "<p>Découvrez les meilleurs exercices pour rester en forme et améliorer votre santé. Le sport est essentiel pour un mode de vie équilibré.</p><p>Intégrer une routine d'exercice régulière peut transformer votre bien-être physique et mental.</p>",
+            "<p>Explorez les richesses culturelles et historiques qui façonnent notre monde. La culture est le reflet de notre humanité.</p><p>Chaque culture apporte une perspective unique et enrichissante à notre compréhension du monde.</p>"
+        )
+
+        val createdArticles = mutableListOf<String>()
+        var publishedCount = 0
+        var privateCount = 0
+        var scheduledCount = 0
+        val blogResults = mutableMapOf<String, Int>() // blogId -> nombre d'articles créés
+
+        // Convertir les blogIds en ObjectId et vérifier qu'ils existent
+        val validBlogIds = request.blogIds.mapNotNull { blogIdStr ->
+            try {
+                val blogId = ObjectId(blogIdStr)
+                // Vérifier que le blog existe et appartient à l'utilisateur
+                val blog = blogRepository.findById(blogId).awaitSingleOrNull()
+                if (blog != null && blog.authorId == authorId) {
+                    blogId
+                } else {
+                    logger.warn("Blog $blogIdStr not found or not owned by user")
+                    null
+                }
+            } catch (e: Exception) {
+                logger.warn("Invalid blog ID format: $blogIdStr")
+                null
+            }
+        }
+
+        if (validBlogIds.isEmpty()) {
+            return@coroutineScope mapOf(
+                "totalRequested" to (request.blogIds.size * request.postsPerBlog),
+                "totalCreated" to 0,
+                "publishedArticles" to 0,
+                "privateArticles" to 0,
+                "scheduledArticles" to 0,
+                "createdArticleIds" to emptyList<String>(),
+                "message" to "No valid blogs found or no blogs owned by user"
+            )
+        }
+
+        // Créer des articles pour chaque blog
+        val allArticles = validBlogIds.flatMap { blogId ->
+            (1..request.postsPerBlog).map { postIndex ->
+                async {
+                    val title = "${request.titlePrefix} ${postIndex}"
+                    val category = categories[random.nextInt(categories.size)]
+                    val tags = tagsList[random.nextInt(tagsList.size)]
+                    val content = contentTemplates[random.nextInt(contentTemplates.size)]
+                    val excerpt = "Résumé de l'article ${postIndex} du blog: ${content.replace(Regex("<[^>]*>"), " ").take(150)}..."
+
+                    // Déterminer si l'article sera publié
+                    val isPublished = if (request.publishSome) {
+                        (random.nextInt(100) < request.publishedPercentage)
+                    } else {
+                        false
+                    }
+
+                    // Déterminer si l'article sera privé
+                    val isPrivate = if (request.makeSomePrivate) {
+                        (random.nextInt(100) < request.privatePercentage)
+                    } else {
+                        false
+                    }
+
+                    // Déterminer si l'article aura une date de publication programmée
+                    val publishAt: Instant? = if (request.scheduleSome && (random.nextInt(100) < request.scheduledPercentage)) {
+                        // Programmer pour dans 1 à 30 jours
+                        Instant.now().plusSeconds((1 + random.nextInt(30)) * 24 * 60 * 60L)
+                    } else {
+                        null
+                    }
+
+                    val createRequest = CreateBlogPostRequest(
+                        title = title,
+                        content = content,
+                        excerpt = excerpt,
+                        coverImageUrl = null,
+                        tags = tags,
+                        category = category,
+                        isPublished = isPublished,
+                        isPrivate = isPrivate,
+                        publishAt = publishAt
+                    )
+
+                    try {
+                        val article = createBlogPost(blogId, createRequest, authorId)
+                        createdArticles.add(article.id)
+                        blogResults[blogId.toHexString()] = blogResults.getOrDefault(blogId.toHexString(), 0) + 1
+                        if (isPublished) publishedCount++
+                        if (isPrivate) privateCount++
+                        if (publishAt != null) scheduledCount++
+                        logger.info("Created test blog post: ${article.title} for blog ${blogId.toHexString()} (Published: $isPublished, Private: $isPrivate)")
+                        article
+                    } catch (e: Exception) {
+                        logger.warn("Failed to create blog post $title for blog ${blogId.toHexString()}: ${e.message}")
+                        null
+                    }
+                }
+            }
+        }.awaitAll().filterNotNull()
+
+        mapOf(
+            "totalBlogsRequested" to request.blogIds.size,
+            "validBlogs" to validBlogIds.size,
+            "postsPerBlog" to request.postsPerBlog,
+            "totalRequested" to (validBlogIds.size * request.postsPerBlog),
+            "totalCreated" to allArticles.size,
+            "publishedArticles" to publishedCount,
+            "privateArticles" to privateCount,
+            "scheduledArticles" to scheduledCount,
+            "createdArticleIds" to createdArticles,
+            "articlesPerBlog" to blogResults,
+            "message" to "Batch blog posts creation completed"
         )
     }
 }

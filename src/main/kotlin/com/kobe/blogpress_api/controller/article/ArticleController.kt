@@ -4,6 +4,7 @@ import com.kobe.blogpress_api.domain.model.article.ArticleType
 import com.kobe.blogpress_api.dto.article.ArticleResponse
 import com.kobe.blogpress_api.dto.article.ArticleSummaryDto
 import com.kobe.blogpress_api.dto.article.BatchCreateArticlesRequestDTO
+import com.kobe.blogpress_api.dto.article.BatchCreateBlogPostsRequestDTO
 import com.kobe.blogpress_api.dto.article.CreateArticleRequest
 import com.kobe.blogpress_api.dto.article.CreateBlogPostRequest
 import com.kobe.blogpress_api.dto.article.UpdateArticleRequest
@@ -362,6 +363,32 @@ class ArticleController(
                 ApiResponseDto.success(
                     data = result,
                     message = "${request.count} articles created successfully",
+                    requestId = requestId
+                )
+            )
+    }
+
+    /**
+     * Créer plusieurs articles de blog (blog posts) pour des blogs spécifiques en batch (pour les tests).
+     *
+     * POST /api/articles/blogs/batch-create
+     */
+    @PostMapping("/blogs/batch-create")
+    suspend fun batchCreateBlogPosts(
+        @AuthenticationPrincipal userId: String,
+        @Valid @RequestBody request: BatchCreateBlogPostsRequestDTO
+    ): ResponseEntity<ApiResponseDto<Map<String, Any>>> {
+        val requestId = UUID.randomUUID().toString()
+        logger.info("[$requestId] User $userId creating ${request.postsPerBlog} posts per blog for ${request.blogIds.size} blogs")
+
+        val result = articleService.batchCreateBlogPosts(request, ObjectId(userId))
+
+        return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(
+                ApiResponseDto.success(
+                    data = result,
+                    message = "Blog posts created successfully",
                     requestId = requestId
                 )
             )
