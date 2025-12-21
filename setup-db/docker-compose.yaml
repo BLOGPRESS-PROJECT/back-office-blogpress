@@ -13,6 +13,9 @@ services:
       MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-blogpress}
     
     ports:
+      # Exposer MongoDB pour accès externe (MongoDB Compass)
+      # ⚠️ SÉCURITÉ: En production, utilisez un firewall pour limiter l'accès
+      # ou configurez MongoDB pour n'accepter que certaines IPs
       - "${MONGO_PORT:-27017}:27017"
     
     volumes:

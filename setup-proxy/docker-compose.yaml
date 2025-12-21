@@ -65,6 +65,11 @@ services:
     container_name: blogpress-certbot
     restart: unless-stopped
 
+    # Variables d'environnement
+    environment:
+      - CERTBOT_EMAIL=${CERTBOT_EMAIL:-admin@blogpress.com}
+      - CERTBOT_MODE=${CERTBOT_MODE:-staging}
+
     # Volumes partagés avec Nginx
     volumes:
       - certbot-certs:/etc/letsencrypt
