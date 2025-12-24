@@ -3,10 +3,8 @@ services:
   # NGINX REVERSE PROXY
   # ==========================================
   nginx:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: blogpress-nginx:${NGINX_VERSION:-latest}
+    # Utiliser l'image depuis Docker Hub (poussée par CI/CD)
+    image: ${DOCKERHUB_USERNAME:-azerty-78}/blogpress-nginx:latest
     container_name: blogpress-nginx
     restart: unless-stopped
 
@@ -17,8 +15,8 @@ services:
 
     # Variables d'environnement
     environment:
-      - API_DOMAIN=${API_DOMAIN:-api.blogpress.com}
-      - FRONTEND_DOMAIN=${FRONTEND_DOMAIN:-blogpress.com}
+      - API_DOMAIN=${API_DOMAIN:-api.blogpress-app.com}
+      - FRONTEND_DOMAIN=${FRONTEND_DOMAIN:-www.blogpress-app.com}
 
     # Volumes
     volumes:
@@ -67,7 +65,7 @@ services:
 
     # Variables d'environnement
     environment:
-      - CERTBOT_EMAIL=${CERTBOT_EMAIL:-admin@blogpress.com}
+      - CERTBOT_EMAIL=${CERTBOT_EMAIL:-admin@blogpress-app.com}
       - CERTBOT_MODE=${CERTBOT_MODE:-staging}
 
     # Volumes partagés avec Nginx
