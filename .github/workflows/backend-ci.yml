@@ -23,6 +23,9 @@ env:
   DOCKER_IMAGE: azerty78/blogpress-api
   DOCKERFILE_PATH: setup-api/Dockerfile
   DOCKER_CONTEXT: .
+  NGINX_IMAGE: azerty78/blogpress-nginx
+  NGINX_DOCKERFILE_PATH: setup-proxy/Dockerfile
+  NGINX_DOCKER_CONTEXT: setup-proxy
 
 # ==========================================
 # JOBS
@@ -226,7 +229,121 @@ jobs:
           docker images | grep "${{ env.DOCKER_IMAGE }}"
   
   # ==========================================
-  # JOB 4: Test Docker Image (optionnel pour l'instant)
+  # JOB 4: Build & Push Nginx Image
+  # ==========================================
+  build-nginx:
+    needs: [tags, test]
+    name: 🔨 Build & Push Nginx Image
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Étape 1: Checkout du code
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      # Étape 2: Nettoyer et recréer les contextes Docker correctement
+      - name: 🧹 Setup Docker Properly
+        run: |
+          # Supprimer buildx et contextes corrompus
+          rm -rf ~/.docker/buildx 2>/dev/null || true
+          rm -rf ~/.docker/contexts 2>/dev/null || true
+          
+          # Recréer la structure de contextes correctement
+          mkdir -p ~/.docker/contexts/meta
+          
+          # Créer le répertoire pour le contexte "setup-proxy"
+          CONTEXT_DIR=~/.docker/contexts/meta/cdb4ee2aea69cc6a83331bbe96dc2caa9a299d21329efb0336fc02a82e1839a8
+          mkdir -p "$CONTEXT_DIR"
+          
+          # Créer le fichier meta.json pour le contexte
+          cat > "$CONTEXT_DIR/meta.json" <<'EOF'
+          {
+            "Name": "setup-proxy",
+            "Metadata": {
+              "Description": "Nginx proxy context"
+            },
+            "Endpoints": {
+              "docker": {
+                "Host": "unix:///var/run/docker.sock",
+                "SkipTLSVerify": false
+              }
+            }
+          }
+          EOF
+          
+          # Vérifier que le fichier a été créé
+          if [ -f "$CONTEXT_DIR/meta.json" ]; then
+            echo "✅ Contexte Docker créé avec succès"
+          else
+            echo "❌ Erreur: Impossible de créer le contexte"
+            exit 1
+          fi
+      
+      # Étape 3: Login à DockerHub 
+      - name: 🔐 Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      
+      # Étape 4: Extract metadata (tags, labels)
+      - name: 📋 Extract metadata
+        id: meta-nginx
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.NGINX_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      # Étape 5: Build Docker Image Nginx
+      - name: 🔨 Build Nginx Docker Image
+        env:
+          DOCKER_BUILDKIT: 0
+        run: |
+          # Préparer les tags
+          TAGS="${{ steps.meta-nginx.outputs.tags }}"
+          if [ -z "$TAGS" ]; then
+            # Fallback si metadata-action ne fonctionne pas
+            TAGS="${{ env.NGINX_IMAGE }}:latest ${{ env.NGINX_IMAGE }}:${{ github.sha }}"
+          fi
+          
+          # Construire les arguments --tag
+          TAG_ARGS=""
+          for tag in $TAGS; do
+            TAG_ARGS="$TAG_ARGS --tag $tag"
+          done
+          
+          # Construire l'image Nginx
+          docker build \
+            --pull \
+            --file ${{ env.NGINX_DOCKERFILE_PATH }} \
+            $TAG_ARGS \
+            ${{ env.NGINX_DOCKER_CONTEXT }}
+          
+          # Push l'image si ce n'est pas une PR
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            for tag in $TAGS; do
+              echo "Pushing $tag..."
+              docker push $tag
+            done
+          fi
+      
+      # Étape 6: Afficher les informations de l'image
+      - name: 📊 Nginx Image Info
+        if: success()
+        run: |
+          echo "✅ Image Nginx buildée avec succès!"
+          echo "📦 Image: ${{ env.NGINX_IMAGE }}"
+          echo "🏷️  Tags: ${{ steps.meta-nginx.outputs.tags }}"
+          docker images | grep "${{ env.NGINX_IMAGE }}"
+  
+  # ==========================================
+  # JOB 5: Test Docker Image (optionnel pour l'instant)
   # ==========================================
   test-image:
     name: 🧪 Test Docker Image

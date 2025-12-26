@@ -4,7 +4,7 @@ services:
   # ==========================================
   nginx:
     # Utiliser l'image depuis Docker Hub (poussée par CI/CD)
-    image: ${DOCKERHUB_USERNAME:-azerty-78}/blogpress-nginx:latest
+    image: ${DOCKERHUB_USERNAME:-azerty78}/blogpress-nginx:latest
     container_name: blogpress-nginx
     restart: unless-stopped
 
