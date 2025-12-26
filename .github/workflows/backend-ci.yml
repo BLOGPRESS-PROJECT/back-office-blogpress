@@ -241,25 +241,6 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
       
-      # Étape 1b: Tester la syntaxe Nginx
-      - name: ✅ Test Nginx Configuration
-        run: |
-          echo "🔍 Test de la syntaxe Nginx..."
-          
-          # Créer un conteneur temporaire pour tester la config
-          docker run --rm \
-            -v "$PWD/setup-proxy/nginx.conf:/etc/nginx/nginx.conf:ro" \
-            -v "$PWD/setup-proxy/conf.d:/etc/nginx/conf.d:ro" \
-            nginx:alpine \
-            nginx -t
-          
-          if [ $? -eq 0 ]; then
-            echo "✅ Configuration Nginx valide!"
-          else
-            echo "❌ Erreur dans la configuration Nginx"
-            exit 1
-          fi
-      
       # Étape 2: Nettoyer et recréer les contextes Docker correctement
       - name: 🧹 Setup Docker Properly
         run: |
@@ -270,16 +251,16 @@ jobs:
           # Recréer la structure de contextes correctement
           mkdir -p ~/.docker/contexts/meta
           
-          # Créer le répertoire pour le contexte "setup-proxy"
-          CONTEXT_DIR=~/.docker/contexts/meta/cdb4ee2aea69cc6a83331bbe96dc2caa9a299d21329efb0336fc02a82e1839a8
-          mkdir -p "$CONTEXT_DIR"
+          # Créer le contexte par défaut "." (nécessaire pour docker run)
+          DEFAULT_CONTEXT_DIR=~/.docker/contexts/meta/cdb4ee2aea69cc6a83331bbe96dc2caa9a299d21329efb0336fc02a82e1839a8
+          mkdir -p "$DEFAULT_CONTEXT_DIR"
           
-          # Créer le fichier meta.json pour le contexte
-          cat > "$CONTEXT_DIR/meta.json" <<'EOF'
+          # Créer le fichier meta.json pour le contexte par défaut
+          cat > "$DEFAULT_CONTEXT_DIR/meta.json" <<'EOF'
           {
-            "Name": "setup-proxy",
+            "Name": ".",
             "Metadata": {
-              "Description": "Nginx proxy context"
+              "Description": "Default context"
             },
             "Endpoints": {
               "docker": {
@@ -291,10 +272,10 @@ jobs:
           EOF
           
           # Vérifier que le fichier a été créé
-          if [ -f "$CONTEXT_DIR/meta.json" ]; then
-            echo "✅ Contexte Docker créé avec succès"
+          if [ -f "$DEFAULT_CONTEXT_DIR/meta.json" ]; then
+            echo "✅ Contexte Docker par défaut créé avec succès"
           else
-            echo "❌ Erreur: Impossible de créer le contexte"
+            echo "❌ Erreur: Impossible de créer le contexte par défaut"
             exit 1
           fi
       
@@ -304,6 +285,30 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      
+      # Étape 3b: Tester la syntaxe Nginx
+      - name: ✅ Test Nginx Configuration
+        run: |
+          echo "🔍 Test de la syntaxe Nginx..."
+          
+          # Pull l'image nginx:alpine pour le test
+          docker pull nginx:alpine || echo "Image déjà présente"
+          
+          # Créer un conteneur temporaire pour tester la config
+          # Utiliser le chemin absolu pour éviter les problèmes
+          ABS_PATH=$(pwd)
+          docker run --rm \
+            -v "$ABS_PATH/setup-proxy/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$ABS_PATH/setup-proxy/conf.d:/etc/nginx/conf.d:ro" \
+            nginx:alpine \
+            nginx -t
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Configuration Nginx valide!"
+          else
+            echo "❌ Erreur dans la configuration Nginx"
+            exit 1
+          fi
       
       # Étape 4: Extract metadata (tags, labels)
       - name: 📋 Extract metadata
