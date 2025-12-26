@@ -46,9 +46,9 @@ volumes:
     name: blogpress-mongodb-config
     driver: local
 
-# ==========================================
-# RÉSEAUX
-# ==========================================
+# ============
+# ==RÉSEAUX ==
+# ============
 networks:
   blogpress-network:
     name: blogpress-network

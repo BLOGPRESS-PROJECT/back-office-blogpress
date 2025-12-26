@@ -1,32 +1,81 @@
-name: Backend CI/CD
+name: 🐳 Build & Push Docker Image
 
+# ==========================================
+# DÉCLENCHEMENT
+# ==========================================
+# Ce workflow se déclenche :
+# - Sur push vers la branche master
+# - Sur pull request vers master (pour tester)
+# - Manuellement depuis l'onglet Actions (workflow_dispatch)
 on:
   push:
-    branches: [ master ]
+    branches:
+      - master
   pull_request:
-    branches: [ master ]
+    branches:
+      - master
+  workflow_dispatch:  # Permet de déclencher manuellement depuis GitHub
 
+# ==========================================
+# VARIABLES GLOBALES
+# ==========================================
 env:
-  REGISTRY: docker.io
-  API_IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/blogpress-api
-  PROXY_IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/blogpress-nginx
+  DOCKER_IMAGE: azerty78/blogpress-api
+  DOCKERFILE_PATH: setup-api/Dockerfile
+  DOCKER_CONTEXT: .
 
+# ==========================================
+# JOBS
+# ==========================================
 jobs:
+  # ==========================================
+  # JOB 1: Create Git Tags
+  # ==========================================
+  tags:
+    name: 🏷️ Create Git Tags
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: 📋 Tag Info
+        run: |
+          echo "✅ Informations sur les tags Git"
+          echo "Ref: ${{ github.ref }}"
+          echo "SHA: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          
+          # Afficher les tags existants
+          git tag -l | head -10 || echo "Aucun tag trouvé"
+          
+          # Si c'est un push sur master, afficher les informations
+          if [ "${{ github.ref }}" == "refs/heads/master" ]; then
+            echo "📌 Push sur master détecté"
+            echo "Commit: ${{ github.sha }}"
+            echo "Message: $(git log -1 --pretty=%B)"
+          fi
+
+  # ==========================================
+  # JOB 2: Run Tests
+  # ==========================================
   test:
-    name: Tests Gradle
+    name: 🧪 Tests Gradle
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup JDK 21
+      - name: ☕ Setup JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
 
-      - name: Cache Gradle
+      - name: 💾 Cache Gradle
         uses: actions/cache@v4
         with:
           path: |
@@ -36,50 +85,209 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Run tests
+      - name: 🧪 Run tests
         run: ./gradlew clean test
 
-  build-and-push:
-    name: Build & Push Docker image
-    needs: test
+  # ==========================================
+  # JOB 3: Build Docker Image
+  # ==========================================
+  build:
+    needs: [tags, test]
+    name: 🔨 Build & Push Docker Image
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout
+      # Étape 1: Checkout du code
+      - name: 📥 Checkout code
         uses: actions/checkout@v4
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
+      
+      # Étape 2: Nettoyer et recréer les contextes Docker correctement
+      - name: 🧹 Setup Docker Properly
+        run: |
+          # Supprimer buildx et contextes corrompus
+          rm -rf ~/.docker/buildx 2>/dev/null || true
+          rm -rf ~/.docker/contexts 2>/dev/null || true
+          
+          # Recréer la structure de contextes correctement
+          mkdir -p ~/.docker/contexts/meta
+          
+          # Créer le répertoire pour le contexte "." (hash de l'erreur)
+          CONTEXT_DIR=~/.docker/contexts/meta/cdb4ee2aea69cc6a83331bbe96dc2caa9a299d21329efb0336fc02a82e1839a8
+          mkdir -p "$CONTEXT_DIR"
+          
+          # Créer le fichier meta.json pour le contexte "."
+          cat > "$CONTEXT_DIR/meta.json" <<'EOF'
+          {
+            "Name": ".",
+            "Metadata": {
+              "Description": "Default context"
+            },
+            "Endpoints": {
+              "docker": {
+                "Host": "unix:///var/run/docker.sock",
+                "SkipTLSVerify": false
+              }
+            }
+          }
+          EOF
+          
+          # Vérifier que le fichier a été créé
+          if [ -f "$CONTEXT_DIR/meta.json" ]; then
+            echo "✅ Contexte Docker '.' créé avec succès"
+          else
+            echo "❌ Erreur: Impossible de créer le contexte"
+            exit 1
+          fi
+      
+      # Étape 3: Login à DockerHub 
+      - name: 🔐 Login to DockerHub
+        run: |
+          # Utiliser docker login directement (le contexte "." existe maintenant)
+          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          
+          # Vérifier le login en testant un pull d'image publique
+          echo "✅ Login DockerHub réussi"
+          
+          # Test: essayer de pull gradle:8.5-jdk21 pour vérifier l'authentification
+          echo "Test: Pull de gradle:8.5-jdk21..."
+          docker pull gradle:8.5-jdk21 || {
+            echo "❌ Erreur: Impossible de pull gradle:8.5-jdk21"
+            echo "Vérification du config.json..."
+            cat ~/.docker/config.json || echo "⚠️ Pas de config.json"
+            exit 1
+          }
+          echo "✅ Pull de gradle:8.5-jdk21 réussi"
+      
+      # Étape 4: Extract metadata (tags, labels)
+      - name: 📋 Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build API image
+          images: ${{ env.DOCKER_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      # Étape 5: Build Docker Image (le contexte "." existe maintenant)
+      - name: 🔨 Build Docker Image
+        env:
+          DOCKER_BUILDKIT: 0
         run: |
-          COMMIT_SHA=${{ github.sha }}
+          # Vérifier que le login fonctionne
+          echo "Vérification de l'authentification DockerHub..."
+          docker info | grep -i "username" || echo "⚠️ Pas de username dans docker info (peut être normal)"
+          
+          # Préparer les tags
+          TAGS="${{ steps.meta.outputs.tags }}"
+          if [ -z "$TAGS" ]; then
+            # Fallback si metadata-action ne fonctionne pas
+            TAGS="${{ env.DOCKER_IMAGE }}:latest ${{ env.DOCKER_IMAGE }}:${{ github.sha }}"
+          fi
+          
+          # Construire les arguments --tag
+          TAG_ARGS=""
+          for tag in $TAGS; do
+            TAG_ARGS="$TAG_ARGS --tag $tag"
+          done
+          
+          # Construire l'image (le contexte "." devrait maintenant exister)
+          # Utiliser --pull pour forcer le pull des images de base avec authentification
           docker build \
-            -f setup-api/Dockerfile \
-            -t $API_IMAGE_NAME:$COMMIT_SHA \
-            -t $API_IMAGE_NAME:latest \
-            .
-
-      - name: Build Proxy image
+            --pull \
+            --file ${{ env.DOCKERFILE_PATH }} \
+            $TAG_ARGS \
+            ${{ env.DOCKER_CONTEXT }}
+          
+          # Push l'image si ce n'est pas une PR
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            for tag in $TAGS; do
+              echo "Pushing $tag..."
+              docker push $tag
+            done
+          fi
+      
+      # Étape 6: Afficher les informations de l'image
+      - name: 📊 Image Info
+        if: success()
         run: |
-          COMMIT_SHA=${{ github.sha }}
-          docker build \
-            -f setup-proxy/Dockerfile \
-            -t $PROXY_IMAGE_NAME:$COMMIT_SHA \
-            -t $PROXY_IMAGE_NAME:latest \
-            setup-proxy
-
-      - name: Push image (only on push, pas sur PR)
-        if: github.event_name == 'push'
+          echo "✅ Image buildée avec succès!"
+          echo "📦 Image: ${{ env.DOCKER_IMAGE }}"
+          echo "🏷️  Tags: ${{ steps.meta.outputs.tags }}"
+          docker images | grep "${{ env.DOCKER_IMAGE }}"
+  
+  # ==========================================
+  # JOB 4: Test Docker Image (optionnel pour l'instant)
+  # ==========================================
+  test-image:
+    name: 🧪 Test Docker Image
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name != 'pull_request'  # Skip tests sur PR
+    
+    steps:
+      # Étape 1: Checkout
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      # Étape 2: Nettoyer et recréer les contextes Docker correctement
+      - name: 🧹 Setup Docker Properly
         run: |
-          COMMIT_SHA=${{ github.sha }}
-          docker push $API_IMAGE_NAME:$COMMIT_SHA
-          docker push $API_IMAGE_NAME:latest
-          docker push $PROXY_IMAGE_NAME:$COMMIT_SHA
-          docker push $PROXY_IMAGE_NAME:latest
+          # Supprimer buildx et contextes corrompus
+          rm -rf ~/.docker/buildx 2>/dev/null || true
+          rm -rf ~/.docker/contexts 2>/dev/null || true
+          
+          # Recréer la structure de contextes correctement
+          mkdir -p ~/.docker/contexts/meta
+          
+          # Créer le répertoire pour le contexte "." (hash de l'erreur)
+          CONTEXT_DIR=~/.docker/contexts/meta/cdb4ee2aea69cc6a83331bbe96dc2caa9a299d21329efb0336fc02a82e1839a8
+          mkdir -p "$CONTEXT_DIR"
+          
+          # Créer le fichier meta.json pour le contexte "."
+          cat > "$CONTEXT_DIR/meta.json" <<'EOF'
+          {
+            "Name": ".",
+            "Metadata": {
+              "Description": "Default context"
+            },
+            "Endpoints": {
+              "docker": {
+                "Host": "unix:///var/run/docker.sock",
+                "SkipTLSVerify": false
+              }
+            }
+          }
+          EOF
+          
+          # Vérifier que le fichier a été créé
+          if [ -f "$CONTEXT_DIR/meta.json" ]; then
+            echo "✅ Contexte Docker '.' créé avec succès"
+          else
+            echo "❌ Erreur: Impossible de créer le contexte"
+            exit 1
+          fi
+      
+      # Étape 3: Login à DockerHub
+      - name: 🔐 Login to DockerHub
+        run: |
+          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          echo "✅ Login DockerHub réussi"
+      
+      # Étape 4: Pull l'image buildée
+      - name: 🐳 Pull Docker Image
+        run: |
+          docker pull ${{ env.DOCKER_IMAGE }}:latest || echo "Image not found, will build locally"
+      
+      # Étape 5: Test basique (vérifier que le conteneur démarre)
+      - name: ✅ Test Container Start
+        run: |
+          docker run -d --name test-container -p 8090:8090 ${{ env.DOCKER_IMAGE }}:latest || docker run -d --name test-container -p 8090:8090 ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
+          sleep 10
+          curl -f http://localhost:8090/actuator/health || exit 1
+          echo "✅ Container started successfully!"
+          docker stop test-container
+          docker rm test-container
