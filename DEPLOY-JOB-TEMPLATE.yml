@@ -1,0 +1,246 @@
+# ==========================================
+# JOB 6: Deploy to VPS
+# ==========================================
+# À ajouter dans .github/workflows/backend-ci.yml
+# après le job test-image
+# ==========================================
+
+  deploy:
+    name: 🚀 Deploy to Production VPS
+    runs-on: ubuntu-latest
+    needs: [build, build-nginx]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    
+    steps:
+      # Étape 1: Checkout du code
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      # Étape 2: Setup SSH
+      - name: 🔐 Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      
+      # Étape 3: Ajouter le serveur aux known hosts
+      - name: 🔑 Add server to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+      
+      # Étape 4: Créer la structure de dossiers sur le VPS
+      - name: 📁 Create directory structure
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            set -e
+            
+            # Créer la structure de base
+            mkdir -p ~/blogpress/{setup-db,setup-api,setup-proxy}
+            mkdir -p ~/blogpress/setup-db/init-scripts
+            mkdir -p ~/blogpress/setup-proxy/conf.d
+            
+            echo "✅ Structure de dossiers créée"
+          EOF
+      
+      # Étape 5: Copier les fichiers de configuration
+      - name: 📋 Copy configuration files
+        run: |
+          # Copier les docker-compose.yaml
+          scp setup-db/docker-compose.yaml ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:~/blogpress/setup-db/
+          scp setup-api/docker-compose.yaml ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:~/blogpress/setup-api/
+          scp setup-proxy/docker-compose.yaml ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:~/blogpress/setup-proxy/
+          
+          # Copier les configurations Nginx
+          scp setup-proxy/nginx.conf ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:~/blogpress/setup-proxy/
+          scp -r setup-proxy/conf.d/* ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:~/blogpress/setup-proxy/conf.d/
+          
+          # Copier les init scripts MongoDB (si existants)
+          if [ -d "setup-db/init-scripts" ] && [ "$(ls -A setup-db/init-scripts)" ]; then
+            scp -r setup-db/init-scripts/* ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:~/blogpress/setup-db/init-scripts/
+          fi
+          
+          echo "✅ Fichiers de configuration copiés"
+      
+      # Étape 6: Mettre à jour les fichiers .env (depuis les secrets GitHub)
+      - name: 🔐 Update .env files
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
+            set -e
+            
+            # Créer/Mettre à jour setup-db/.env
+            cat > ~/blogpress/setup-db/.env << 'ENVEOF'
+          MONGO_ROOT_USERNAME=${{ secrets.MONGO_ROOT_USERNAME }}
+          MONGO_ROOT_PASSWORD=${{ secrets.MONGO_ROOT_PASSWORD }}
+          MONGO_DATABASE=${{ secrets.MONGO_DATABASE }}
+          MONGO_PORT=${{ secrets.MONGO_PORT }}
+          ENVEOF
+            
+            # Créer/Mettre à jour setup-api/.env
+            cat > ~/blogpress/setup-api/.env << 'ENVEOF'
+          SPRING_PROFILE=${{ secrets.SPRING_PROFILE }}
+          APP_BASE_URL=${{ secrets.APP_BASE_URL }}
+          APP_FRONTEND_URL=${{ secrets.APP_FRONTEND_URL }}
+          ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}
+          SPRING_DATA_MONGODB_URI=${{ secrets.SPRING_DATA_MONGODB_URI }}
+          MONGO_AUTO_INDEX=${{ secrets.MONGO_AUTO_INDEX }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          JWT_ACCESS_TOKEN_EXPIRATION=${{ secrets.JWT_ACCESS_TOKEN_EXPIRATION }}
+          JWT_REFRESH_TOKEN_EXPIRATION=${{ secrets.JWT_REFRESH_TOKEN_EXPIRATION }}
+          ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_USERNAME=${{ secrets.ADMIN_USERNAME }}
+          ADMIN_FIRSTNAME=${{ secrets.ADMIN_FIRSTNAME }}
+          ADMIN_LASTNAME=${{ secrets.ADMIN_LASTNAME }}
+          FILE_STORAGE_BASE_PATH=${{ secrets.FILE_STORAGE_BASE_PATH }}
+          FILE_STORAGE_MAX_FILE_SIZE=${{ secrets.FILE_STORAGE_MAX_FILE_SIZE }}
+          FILE_STORAGE_ALLOWED_TYPES=${{ secrets.FILE_STORAGE_ALLOWED_TYPES }}
+          MULTIPART_MAX_FILE_SIZE=${{ secrets.MULTIPART_MAX_FILE_SIZE }}
+          MULTIPART_MAX_REQUEST_SIZE=${{ secrets.MULTIPART_MAX_REQUEST_SIZE }}
+          LOG_LEVEL_ROOT=${{ secrets.LOG_LEVEL_ROOT }}
+          LOG_LEVEL_APP=${{ secrets.LOG_LEVEL_APP }}
+          LOG_LEVEL_MONGO=${{ secrets.LOG_LEVEL_MONGO }}
+          DEVTOOLS_ENABLED=${{ secrets.DEVTOOLS_ENABLED }}
+          JAVA_OPTS=${{ secrets.JAVA_OPTS }}
+          API_PORT=${{ secrets.API_PORT }}
+          DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+          ENVEOF
+            
+            # Créer/Mettre à jour setup-proxy/.env
+            cat > ~/blogpress/setup-proxy/.env << 'ENVEOF'
+          NGINX_HTTP_PORT=${{ secrets.NGINX_HTTP_PORT }}
+          NGINX_HTTPS_PORT=${{ secrets.NGINX_HTTPS_PORT }}
+          API_DOMAIN=${{ secrets.API_DOMAIN }}
+          FRONTEND_DOMAIN=${{ secrets.FRONTEND_DOMAIN }}
+          CERTBOT_EMAIL=${{ secrets.CERTBOT_EMAIL }}
+          CERTBOT_MODE=${{ secrets.CERTBOT_MODE }}
+          DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+          ENVEOF
+            
+            echo "✅ Fichiers .env mis à jour"
+          EOF
+      
+      # Étape 7: Login à Docker Hub sur le VPS
+      - name: 🐳 Login to Docker Hub on VPS
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
+            echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+            echo "✅ Login Docker Hub réussi sur le VPS"
+          EOF
+      
+      # Étape 8: Déployer MongoDB (si pas déjà démarré)
+      - name: 🗄️ Deploy MongoDB
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            set -e
+            cd ~/blogpress/setup-db
+            
+            # Démarrer MongoDB si pas déjà démarré
+            docker compose up -d
+            
+            # Attendre que MongoDB soit prêt
+            echo "⏳ Attente que MongoDB soit prêt..."
+            sleep 10
+            
+            # Vérifier que MongoDB est en cours d'exécution
+            docker compose ps
+            
+            echo "✅ MongoDB déployé"
+          EOF
+      
+      # Étape 9: Déployer l'API
+      - name: 🔧 Deploy API
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            set -e
+            cd ~/blogpress/setup-api
+            
+            # Pull la nouvelle image
+            echo "📥 Pull de la nouvelle image API..."
+            docker compose pull
+            
+            # Démarrer/Redémarrer l'API
+            echo "🚀 Démarrage de l'API..."
+            docker compose up -d --force-recreate
+            
+            # Attendre que l'API soit prête
+            echo "⏳ Attente que l'API soit prête..."
+            sleep 15
+            
+            # Vérifier le health check
+            echo "🏥 Vérification du health check..."
+            for i in {1..30}; do
+              if curl -f http://localhost:8090/actuator/health 2>/dev/null; then
+                echo "✅ API est prête!"
+                break
+              fi
+              echo "⏳ Tentative $i/30..."
+              sleep 2
+            done
+            
+            # Nettoyer les anciennes images
+            docker image prune -f
+            
+            echo "✅ API déployée avec succès"
+          EOF
+      
+      # Étape 10: Déployer Nginx
+      - name: 🌐 Deploy Nginx
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            set -e
+            cd ~/blogpress/setup-proxy
+            
+            # Pull la nouvelle image
+            echo "📥 Pull de la nouvelle image Nginx..."
+            docker compose pull
+            
+            # Démarrer/Redémarrer Nginx
+            echo "🚀 Démarrage de Nginx..."
+            docker compose up -d --force-recreate
+            
+            # Recharger Nginx pour appliquer les changements
+            sleep 5
+            docker exec blogpress-nginx nginx -s reload || echo "⚠️ Nginx reload non nécessaire"
+            
+            # Nettoyer les anciennes images
+            docker image prune -f
+            
+            echo "✅ Nginx déployé avec succès"
+          EOF
+      
+      # Étape 11: Vérification finale
+      - name: ✅ Verify deployment
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            set -e
+            
+            echo "📊 État des conteneurs:"
+            docker ps --filter "name=blogpress" --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+            
+            echo ""
+            echo "🏥 Health checks:"
+            
+            # Health check MongoDB
+            if docker exec blogpress-mongodb mongosh --eval "db.adminCommand('ping')" --quiet > /dev/null 2>&1; then
+              echo "✅ MongoDB: OK"
+            else
+              echo "⚠️ MongoDB: En cours de démarrage"
+            fi
+            
+            # Health check API
+            if curl -f http://localhost:8090/actuator/health > /dev/null 2>&1; then
+              echo "✅ API: OK"
+            else
+              echo "⚠️ API: En cours de démarrage"
+            fi
+            
+            # Health check Nginx
+            if docker exec blogpress-nginx nginx -t > /dev/null 2>&1; then
+              echo "✅ Nginx: OK"
+            else
+              echo "⚠️ Nginx: Erreur de configuration"
+            fi
+            
+            echo ""
+            echo "✅ Déploiement terminé!"
+          EOF
+
