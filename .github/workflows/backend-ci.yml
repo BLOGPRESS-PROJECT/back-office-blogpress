@@ -144,11 +144,14 @@ jobs:
       
       # Étape 3: Login à DockerHub 
       - name: 🔐 Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      
+      # Étape 3b: Vérifier le login
+      - name: ✅ Verify DockerHub Login
         run: |
-          # Utiliser docker login directement (le contexte "." existe maintenant)
-          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-          
-          # Vérifier le login en testant un pull d'image publique
           echo "✅ Login DockerHub réussi"
           
           # Test: essayer de pull gradle:8.5-jdk21 pour vérifier l'authentification
@@ -276,9 +279,10 @@ jobs:
       
       # Étape 3: Login à DockerHub
       - name: 🔐 Login to DockerHub
-        run: |
-          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-          echo "✅ Login DockerHub réussi"
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
       
       # Étape 4: Pull l'image buildée
       - name: 🐳 Pull Docker Image
