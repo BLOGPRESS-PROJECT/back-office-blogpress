@@ -241,6 +241,25 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
       
+      # Étape 1b: Tester la syntaxe Nginx
+      - name: ✅ Test Nginx Configuration
+        run: |
+          echo "🔍 Test de la syntaxe Nginx..."
+          
+          # Créer un conteneur temporaire pour tester la config
+          docker run --rm \
+            -v "$PWD/setup-proxy/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$PWD/setup-proxy/conf.d:/etc/nginx/conf.d:ro" \
+            nginx:alpine \
+            nginx -t
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Configuration Nginx valide!"
+          else
+            echo "❌ Erreur dans la configuration Nginx"
+            exit 1
+          fi
+      
       # Étape 2: Nettoyer et recréer les contextes Docker correctement
       - name: 🧹 Setup Docker Properly
         run: |
