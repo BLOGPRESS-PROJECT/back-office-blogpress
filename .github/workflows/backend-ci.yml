@@ -548,10 +548,23 @@ jobs:
               SUDO_CMD="sudo"
               echo "✅ Sudo fonctionne sans mot de passe"
             else
-              echo "❌ Erreur: Sudo nécessite un mot de passe"
-              echo "⚠️  L'utilisateur doit pouvoir utiliser sudo sans mot de passe (NOPASSWD)"
-              echo "   Configurez sur le VPS avec:"
-              echo "   echo '$USER ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/$USER"
+              echo ""
+              echo "❌ ERREUR: Sudo nécessite un mot de passe"
+              echo ""
+              echo "📋 SOLUTION: Configurez sudo pour fonctionner sans mot de passe sur le VPS"
+              echo ""
+              echo "🔧 Étapes à suivre sur le VPS:"
+              echo "   1. Connectez-vous au VPS: ssh $USER@${{ secrets.VPS_HOST }}"
+              echo "   2. Exécutez cette commande (remplacez USERNAME par votre nom d'utilisateur):"
+              echo "      echo 'USERNAME ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/USERNAME"
+              echo "   3. Vérifiez: sudo visudo -c"
+              echo "   4. Testez: sudo -n true && echo 'OK'"
+              echo ""
+              echo "📚 Guide complet: Voir VPS-SUDO-SETUP.md dans le dépôt"
+              echo ""
+              echo "⚠️  IMPORTANT: Ne mettez JAMAIS le mot de passe sudo dans les secrets GitHub"
+              echo "   Utilisez NOPASSWD pour sudo (c'est la méthode sécurisée recommandée)"
+              echo ""
               exit 1
             fi
             
