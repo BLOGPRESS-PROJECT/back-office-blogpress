@@ -157,4 +157,5 @@ setup-proxy/
 - Les certificats SSL sont automatiquement renouvelés toutes les 12h
 - Nginx se recharge automatiquement toutes les 6h
 - Les logs sont stockés dans le volume `nginx-logs`
+- C'est high
 
