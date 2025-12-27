@@ -537,6 +537,18 @@ jobs:
       # Étape 4: Vérifier et installer Docker sur le VPS
       - name: 🐳 Ensure Docker is installed and running
         run: |
+          # Recréer le fichier de config SSH pour cette étape
+          mkdir -p ~/.ssh
+          cat > ~/.ssh/config << EOF
+          Host vps-deploy
+            HostName ${{ secrets.VPS_HOST }}
+            User ${{ secrets.VPS_USERNAME }}
+            Port ${{ secrets.VPS_PORT || 22 }}
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+          chmod 600 ~/.ssh/config
+          
           ssh -F ~/.ssh/config vps-deploy << 'EOF'
             set -e
             
@@ -656,6 +668,18 @@ jobs:
       # Étape 5: Créer la structure de dossiers sur le VPS
       - name: 📁 Create directory structure
         run: |
+          # Recréer le fichier de config SSH pour cette étape
+          mkdir -p ~/.ssh
+          cat > ~/.ssh/config << EOF
+          Host vps-deploy
+            HostName ${{ secrets.VPS_HOST }}
+            User ${{ secrets.VPS_USERNAME }}
+            Port ${{ secrets.VPS_PORT || 22 }}
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+          chmod 600 ~/.ssh/config
+          
           ssh -F ~/.ssh/config vps-deploy << 'EOF'
             set -e
             
@@ -670,20 +694,33 @@ jobs:
       # Étape 6: Copier les fichiers de configuration
       - name: 📋 Copy configuration files
         run: |
-          SSH_OPTS="-F ~/.ssh/config"
+          # Recréer le fichier de config SSH pour cette étape
+          mkdir -p ~/.ssh
+          cat > ~/.ssh/config << EOF
+          Host vps-deploy
+            HostName ${{ secrets.VPS_HOST }}
+            User ${{ secrets.VPS_USERNAME }}
+            Port ${{ secrets.VPS_PORT || 22 }}
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+          chmod 600 ~/.ssh/config
+          
+          # Ajouter le serveur aux known hosts
+          ssh-keyscan -p ${{ secrets.VPS_PORT || 22 }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
           
           # Copier les docker-compose.yaml
-          scp $SSH_OPTS setup-db/docker-compose.yaml vps-deploy:~/blogpress/setup-db/
-          scp $SSH_OPTS setup-api/docker-compose.yaml vps-deploy:~/blogpress/setup-api/
-          scp $SSH_OPTS setup-proxy/docker-compose.yaml vps-deploy:~/blogpress/setup-proxy/
+          scp -F ~/.ssh/config setup-db/docker-compose.yaml vps-deploy:~/blogpress/setup-db/
+          scp -F ~/.ssh/config setup-api/docker-compose.yaml vps-deploy:~/blogpress/setup-api/
+          scp -F ~/.ssh/config setup-proxy/docker-compose.yaml vps-deploy:~/blogpress/setup-proxy/
           
           # Copier les configurations Nginx
-          scp $SSH_OPTS setup-proxy/nginx.conf vps-deploy:~/blogpress/setup-proxy/
-          scp $SSH_OPTS -r setup-proxy/conf.d/* vps-deploy:~/blogpress/setup-proxy/conf.d/
+          scp -F ~/.ssh/config setup-proxy/nginx.conf vps-deploy:~/blogpress/setup-proxy/
+          scp -F ~/.ssh/config -r setup-proxy/conf.d/* vps-deploy:~/blogpress/setup-proxy/conf.d/
           
           # Copier les init scripts MongoDB (si existants)
           if [ -d "setup-db/init-scripts" ] && [ "$(ls -A setup-db/init-scripts)" ]; then
-            scp $SSH_OPTS -r setup-db/init-scripts/* vps-deploy:~/blogpress/setup-db/init-scripts/
+            scp -F ~/.ssh/config -r setup-db/init-scripts/* vps-deploy:~/blogpress/setup-db/init-scripts/
           fi
           
           echo "✅ Fichiers de configuration copiés"
@@ -691,6 +728,18 @@ jobs:
       # Étape 7: Mettre à jour les fichiers .env (depuis les secrets GitHub)
       - name: 🔐 Update .env files
         run: |
+          # Recréer le fichier de config SSH pour cette étape
+          mkdir -p ~/.ssh
+          cat > ~/.ssh/config << EOF
+          Host vps-deploy
+            HostName ${{ secrets.VPS_HOST }}
+            User ${{ secrets.VPS_USERNAME }}
+            Port ${{ secrets.VPS_PORT || 22 }}
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+          chmod 600 ~/.ssh/config
+          
           ssh -F ~/.ssh/config vps-deploy << EOF
             set -e
             
@@ -749,6 +798,18 @@ jobs:
       # Étape 8: Login à Docker Hub sur le VPS
       - name: 🐳 Login to Docker Hub on VPS
         run: |
+          # Recréer le fichier de config SSH pour cette étape
+          mkdir -p ~/.ssh
+          cat > ~/.ssh/config << EOF
+          Host vps-deploy
+            HostName ${{ secrets.VPS_HOST }}
+            User ${{ secrets.VPS_USERNAME }}
+            Port ${{ secrets.VPS_PORT || 22 }}
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+          chmod 600 ~/.ssh/config
+          
           ssh -F ~/.ssh/config vps-deploy << 'EOF'
             set -e
             
@@ -771,6 +832,18 @@ jobs:
       # Étape 9: Déployer MongoDB (si pas déjà démarré)
       - name: 🗄️ Deploy MongoDB
         run: |
+          # Recréer le fichier de config SSH pour cette étape
+          mkdir -p ~/.ssh
+          cat > ~/.ssh/config << EOF
+          Host vps-deploy
+            HostName ${{ secrets.VPS_HOST }}
+            User ${{ secrets.VPS_USERNAME }}
+            Port ${{ secrets.VPS_PORT || 22 }}
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+          chmod 600 ~/.ssh/config
+          
           ssh -F ~/.ssh/config vps-deploy << 'EOF'
             set -e
             cd ~/blogpress/setup-db
@@ -802,6 +875,18 @@ jobs:
       # Étape 10: Déployer l'API
       - name: 🔧 Deploy API
         run: |
+          # Recréer le fichier de config SSH pour cette étape
+          mkdir -p ~/.ssh
+          cat > ~/.ssh/config << EOF
+          Host vps-deploy
+            HostName ${{ secrets.VPS_HOST }}
+            User ${{ secrets.VPS_USERNAME }}
+            Port ${{ secrets.VPS_PORT || 22 }}
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+          chmod 600 ~/.ssh/config
+          
           ssh -F ~/.ssh/config vps-deploy << 'EOF'
             set -e
             cd ~/blogpress/setup-api
@@ -849,6 +934,18 @@ jobs:
       # Étape 11: Déployer Nginx
       - name: 🌐 Deploy Nginx
         run: |
+          # Recréer le fichier de config SSH pour cette étape
+          mkdir -p ~/.ssh
+          cat > ~/.ssh/config << EOF
+          Host vps-deploy
+            HostName ${{ secrets.VPS_HOST }}
+            User ${{ secrets.VPS_USERNAME }}
+            Port ${{ secrets.VPS_PORT || 22 }}
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+          chmod 600 ~/.ssh/config
+          
           ssh -F ~/.ssh/config vps-deploy << 'EOF'
             set -e
             cd ~/blogpress/setup-proxy
@@ -885,6 +982,18 @@ jobs:
       # Étape 12: Vérification finale
       - name: ✅ Verify deployment
         run: |
+          # Recréer le fichier de config SSH pour cette étape
+          mkdir -p ~/.ssh
+          cat > ~/.ssh/config << EOF
+          Host vps-deploy
+            HostName ${{ secrets.VPS_HOST }}
+            User ${{ secrets.VPS_USERNAME }}
+            Port ${{ secrets.VPS_PORT || 22 }}
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+          chmod 600 ~/.ssh/config
+          
           ssh -F ~/.ssh/config vps-deploy << 'EOF'
             set -e
             
