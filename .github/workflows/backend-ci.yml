@@ -496,3 +496,387 @@ jobs:
           # Nettoyage
           docker stop test-container || true
           docker rm test-container || true
+
+  # ==========================================
+  # JOB 6: Deploy to VPS
+  # ==========================================
+  deploy:
+    name: 🚀 Deploy to Production VPS
+    runs-on: ubuntu-latest
+    needs: [build, build-nginx]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    
+    steps:
+      # Étape 1: Checkout du code
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      # Étape 2: Setup SSH
+      - name: 🔐 Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+      
+      # Étape 3: Configurer SSH avec le port personnalisé
+      - name: 🔧 Configure SSH
+        run: |
+          # Créer le fichier de config SSH
+          mkdir -p ~/.ssh
+          cat >> ~/.ssh/config << EOF
+          Host vps-deploy
+            HostName ${{ secrets.VPS_HOST }}
+            User ${{ secrets.VPS_USERNAME }}
+            Port ${{ secrets.VPS_PORT || 22 }}
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+          
+          # Ajouter le serveur aux known hosts
+          ssh-keyscan -p ${{ secrets.VPS_PORT || 22 }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+      
+      # Étape 4: Vérifier et installer Docker sur le VPS
+      - name: 🐳 Ensure Docker is installed and running
+        run: |
+          ssh -F ~/.ssh/config vps-deploy << 'EOF'
+            set -e
+            
+            echo "🔍 Vérification de Docker..."
+            
+            # Vérifier si Docker est installé
+            if ! command -v docker &> /dev/null; then
+              echo "📦 Docker n'est pas installé, installation en cours..."
+              
+              # Détecter la distribution
+              if [ -f /etc/os-release ]; then
+                . /etc/os-release
+                OS=$ID
+              else
+                echo "❌ Impossible de détecter la distribution"
+                exit 1
+              fi
+              
+              # Installation selon la distribution
+              if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
+                # Mettre à jour les paquets
+                sudo apt-get update
+                
+                # Installer les dépendances
+                sudo apt-get install -y \
+                  ca-certificates \
+                  curl \
+                  gnupg \
+                  lsb-release
+                
+                # Ajouter la clé GPG Docker
+                sudo mkdir -p /etc/apt/keyrings
+                curl -fsSL https://download.docker.com/linux/$OS/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+                
+                # Ajouter le repository Docker
+                echo \
+                  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$OS \
+                  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                
+                # Installer Docker
+                sudo apt-get update
+                sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+                
+              elif [ "$OS" = "centos" ] || [ "$OS" = "rhel" ] || [ "$OS" = "fedora" ]; then
+                # Installation pour CentOS/RHEL/Fedora
+                sudo yum install -y yum-utils
+                sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+                sudo yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+                
+              else
+                echo "❌ Distribution non supportée: $OS"
+                exit 1
+              fi
+              
+              echo "✅ Docker installé"
+            else
+              echo "✅ Docker est déjà installé"
+              docker --version
+            fi
+            
+            # Vérifier si Docker est en cours d'exécution
+            if ! sudo systemctl is-active --quiet docker; then
+              echo "🚀 Démarrage de Docker..."
+              sudo systemctl start docker
+              sudo systemctl enable docker
+            else
+              echo "✅ Docker est déjà en cours d'exécution"
+            fi
+            
+            # Vérifier que l'utilisateur peut utiliser Docker sans sudo
+            if ! docker ps &> /dev/null; then
+              echo "👤 Ajout de l'utilisateur au groupe docker..."
+              sudo usermod -aG docker $USER
+              echo "⚠️  Note: Vous devrez peut-être vous reconnecter pour que les changements prennent effet"
+              # Essayer avec sudo pour cette session
+              sudo docker ps > /dev/null && echo "✅ Docker fonctionne avec sudo"
+            else
+              echo "✅ Docker fonctionne sans sudo"
+            fi
+            
+            # Vérifier Docker Compose
+            if ! command -v docker compose &> /dev/null && ! command -v docker-compose &> /dev/null; then
+              echo "⚠️  Docker Compose n'est pas disponible, mais docker compose plugin devrait fonctionner"
+            else
+              echo "✅ Docker Compose est disponible"
+            fi
+            
+            echo "✅ Docker est prêt!"
+          EOF
+      
+      # Étape 5: Créer la structure de dossiers sur le VPS
+      - name: 📁 Create directory structure
+        run: |
+          ssh -F ~/.ssh/config vps-deploy << 'EOF'
+            set -e
+            
+            # Créer la structure de base
+            mkdir -p ~/blogpress/{setup-db,setup-api,setup-proxy}
+            mkdir -p ~/blogpress/setup-db/init-scripts
+            mkdir -p ~/blogpress/setup-proxy/conf.d
+            
+            echo "✅ Structure de dossiers créée"
+          EOF
+      
+      # Étape 6: Copier les fichiers de configuration
+      - name: 📋 Copy configuration files
+        run: |
+          SSH_OPTS="-F ~/.ssh/config"
+          
+          # Copier les docker-compose.yaml
+          scp $SSH_OPTS setup-db/docker-compose.yaml vps-deploy:~/blogpress/setup-db/
+          scp $SSH_OPTS setup-api/docker-compose.yaml vps-deploy:~/blogpress/setup-api/
+          scp $SSH_OPTS setup-proxy/docker-compose.yaml vps-deploy:~/blogpress/setup-proxy/
+          
+          # Copier les configurations Nginx
+          scp $SSH_OPTS setup-proxy/nginx.conf vps-deploy:~/blogpress/setup-proxy/
+          scp $SSH_OPTS -r setup-proxy/conf.d/* vps-deploy:~/blogpress/setup-proxy/conf.d/
+          
+          # Copier les init scripts MongoDB (si existants)
+          if [ -d "setup-db/init-scripts" ] && [ "$(ls -A setup-db/init-scripts)" ]; then
+            scp $SSH_OPTS -r setup-db/init-scripts/* vps-deploy:~/blogpress/setup-db/init-scripts/
+          fi
+          
+          echo "✅ Fichiers de configuration copiés"
+      
+      # Étape 7: Mettre à jour les fichiers .env (depuis les secrets GitHub)
+      - name: 🔐 Update .env files
+        run: |
+          ssh -F ~/.ssh/config vps-deploy << EOF
+            set -e
+            
+            # Créer/Mettre à jour setup-db/.env
+            cat > ~/blogpress/setup-db/.env << 'ENVEOF'
+          MONGO_ROOT_USERNAME=${{ secrets.MONGO_ROOT_USERNAME }}
+          MONGO_ROOT_PASSWORD=${{ secrets.MONGO_ROOT_PASSWORD }}
+          MONGO_DATABASE=${{ secrets.MONGO_DATABASE }}
+          MONGO_PORT=${{ secrets.MONGO_PORT }}
+          ENVEOF
+            
+            # Créer/Mettre à jour setup-api/.env
+            cat > ~/blogpress/setup-api/.env << 'ENVEOF'
+          SPRING_PROFILE=${{ secrets.SPRING_PROFILE }}
+          APP_BASE_URL=${{ secrets.APP_BASE_URL }}
+          APP_FRONTEND_URL=${{ secrets.APP_FRONTEND_URL }}
+          ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}
+          SPRING_DATA_MONGODB_URI=${{ secrets.SPRING_DATA_MONGODB_URI }}
+          MONGO_AUTO_INDEX=${{ secrets.MONGO_AUTO_INDEX }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          JWT_ACCESS_TOKEN_EXPIRATION=${{ secrets.JWT_ACCESS_TOKEN_EXPIRATION }}
+          JWT_REFRESH_TOKEN_EXPIRATION=${{ secrets.JWT_REFRESH_TOKEN_EXPIRATION }}
+          ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_USERNAME=${{ secrets.ADMIN_USERNAME }}
+          ADMIN_FIRSTNAME=${{ secrets.ADMIN_FIRSTNAME }}
+          ADMIN_LASTNAME=${{ secrets.ADMIN_LASTNAME }}
+          FILE_STORAGE_BASE_PATH=${{ secrets.FILE_STORAGE_BASE_PATH }}
+          FILE_STORAGE_MAX_FILE_SIZE=${{ secrets.FILE_STORAGE_MAX_FILE_SIZE }}
+          FILE_STORAGE_ALLOWED_TYPES=${{ secrets.FILE_STORAGE_ALLOWED_TYPES }}
+          MULTIPART_MAX_FILE_SIZE=${{ secrets.MULTIPART_MAX_FILE_SIZE }}
+          MULTIPART_MAX_REQUEST_SIZE=${{ secrets.MULTIPART_MAX_REQUEST_SIZE }}
+          LOG_LEVEL_ROOT=${{ secrets.LOG_LEVEL_ROOT }}
+          LOG_LEVEL_APP=${{ secrets.LOG_LEVEL_APP }}
+          LOG_LEVEL_MONGO=${{ secrets.LOG_LEVEL_MONGO }}
+          DEVTOOLS_ENABLED=${{ secrets.DEVTOOLS_ENABLED }}
+          JAVA_OPTS=${{ secrets.JAVA_OPTS }}
+          API_PORT=${{ secrets.API_PORT }}
+          DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+          ENVEOF
+            
+            # Créer/Mettre à jour setup-proxy/.env
+            cat > ~/blogpress/setup-proxy/.env << 'ENVEOF'
+          NGINX_HTTP_PORT=${{ secrets.NGINX_HTTP_PORT }}
+          NGINX_HTTPS_PORT=${{ secrets.NGINX_HTTPS_PORT }}
+          API_DOMAIN=${{ secrets.API_DOMAIN }}
+          FRONTEND_DOMAIN=${{ secrets.FRONTEND_DOMAIN }}
+          CERTBOT_EMAIL=${{ secrets.CERTBOT_EMAIL }}
+          CERTBOT_MODE=${{ secrets.CERTBOT_MODE }}
+          DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+          ENVEOF
+            
+            echo "✅ Fichiers .env mis à jour"
+          EOF
+      
+      # Étape 8: Login à Docker Hub sur le VPS
+      - name: 🐳 Login to Docker Hub on VPS
+        run: |
+          ssh -F ~/.ssh/config vps-deploy << EOF
+            # Utiliser sudo si nécessaire
+            if docker ps &> /dev/null; then
+              DOCKER_CMD="docker"
+            else
+              DOCKER_CMD="sudo docker"
+            fi
+            
+            echo "${{ secrets.DOCKERHUB_PASSWORD }}" | \$DOCKER_CMD login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+            echo "✅ Login Docker Hub réussi sur le VPS"
+          EOF
+      
+      # Étape 9: Déployer MongoDB (si pas déjà démarré)
+      - name: 🗄️ Deploy MongoDB
+        run: |
+          ssh -F ~/.ssh/config vps-deploy << 'EOF'
+            set -e
+            cd ~/blogpress/setup-db
+            
+            # Utiliser sudo si nécessaire
+            if docker ps &> /dev/null; then
+              DOCKER_CMD="docker"
+            else
+              DOCKER_CMD="sudo docker"
+            fi
+            
+            # Démarrer MongoDB si pas déjà démarré
+            $DOCKER_CMD compose up -d
+            
+            # Attendre que MongoDB soit prêt
+            echo "⏳ Attente que MongoDB soit prêt..."
+            sleep 10
+            
+            # Vérifier que MongoDB est en cours d'exécution
+            $DOCKER_CMD compose ps
+            
+            echo "✅ MongoDB déployé"
+          EOF
+      
+      # Étape 10: Déployer l'API
+      - name: 🔧 Deploy API
+        run: |
+          ssh -F ~/.ssh/config vps-deploy << 'EOF'
+            set -e
+            cd ~/blogpress/setup-api
+            
+            # Utiliser sudo si nécessaire
+            if docker ps &> /dev/null; then
+              DOCKER_CMD="docker"
+            else
+              DOCKER_CMD="sudo docker"
+            fi
+            
+            # Pull la nouvelle image
+            echo "📥 Pull de la nouvelle image API..."
+            $DOCKER_CMD compose pull
+            
+            # Démarrer/Redémarrer l'API
+            echo "🚀 Démarrage de l'API..."
+            $DOCKER_CMD compose up -d --force-recreate
+            
+            # Attendre que l'API soit prête
+            echo "⏳ Attente que l'API soit prête..."
+            sleep 15
+            
+            # Vérifier le health check
+            echo "🏥 Vérification du health check..."
+            for i in {1..30}; do
+              if curl -f http://localhost:8090/actuator/health 2>/dev/null; then
+                echo "✅ API est prête!"
+                break
+              fi
+              echo "⏳ Tentative $i/30..."
+              sleep 2
+            done
+            
+            # Nettoyer les anciennes images
+            $DOCKER_CMD image prune -f
+            
+            echo "✅ API déployée avec succès"
+          EOF
+      
+      # Étape 11: Déployer Nginx
+      - name: 🌐 Deploy Nginx
+        run: |
+          ssh -F ~/.ssh/config vps-deploy << 'EOF'
+            set -e
+            cd ~/blogpress/setup-proxy
+            
+            # Utiliser sudo si nécessaire
+            if docker ps &> /dev/null; then
+              DOCKER_CMD="docker"
+            else
+              DOCKER_CMD="sudo docker"
+            fi
+            
+            # Pull la nouvelle image
+            echo "📥 Pull de la nouvelle image Nginx..."
+            $DOCKER_CMD compose pull
+            
+            # Démarrer/Redémarrer Nginx
+            echo "🚀 Démarrage de Nginx..."
+            $DOCKER_CMD compose up -d --force-recreate
+            
+            # Recharger Nginx pour appliquer les changements
+            sleep 5
+            $DOCKER_CMD exec blogpress-nginx nginx -s reload || echo "⚠️ Nginx reload non nécessaire"
+            
+            # Nettoyer les anciennes images
+            $DOCKER_CMD image prune -f
+            
+            echo "✅ Nginx déployé avec succès"
+          EOF
+      
+      # Étape 12: Vérification finale
+      - name: ✅ Verify deployment
+        run: |
+          ssh -F ~/.ssh/config vps-deploy << 'EOF'
+            set -e
+            
+            # Utiliser sudo si nécessaire
+            if docker ps &> /dev/null; then
+              DOCKER_CMD="docker"
+            else
+              DOCKER_CMD="sudo docker"
+            fi
+            
+            echo "📊 État des conteneurs:"
+            $DOCKER_CMD ps --filter "name=blogpress" --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+            
+            echo ""
+            echo "🏥 Health checks:"
+            
+            # Health check MongoDB
+            if $DOCKER_CMD exec blogpress-mongodb mongosh --eval "db.adminCommand('ping')" --quiet > /dev/null 2>&1; then
+              echo "✅ MongoDB: OK"
+            else
+              echo "⚠️ MongoDB: En cours de démarrage"
+            fi
+            
+            # Health check API
+            if curl -f http://localhost:8090/actuator/health > /dev/null 2>&1; then
+              echo "✅ API: OK"
+            else
+              echo "⚠️ API: En cours de démarrage"
+            fi
+            
+            # Health check Nginx
+            if $DOCKER_CMD exec blogpress-nginx nginx -t > /dev/null 2>&1; then
+              echo "✅ Nginx: OK"
+            else
+              echo "⚠️ Nginx: Erreur de configuration"
+            fi
+            
+            echo ""
+            echo "✅ Déploiement terminé!"
+          EOF
