@@ -684,7 +684,7 @@ COPY package*.json ./
 RUN npm ci --only=production
 
 # Copier le code source
-COPY . .
+COPY .. .
 
 # Build l'application
 RUN npm run build

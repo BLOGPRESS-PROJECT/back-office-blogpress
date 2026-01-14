@@ -78,7 +78,6 @@ class AutoPublishService(
             )
             
             val update = Update().set("isPublished", true).set("updatedAt", now)
-            
             val result = mongoTemplate.updateMulti(query, update, Article::class.java).block()
             
             if (result != null && result.modifiedCount > 0) {
