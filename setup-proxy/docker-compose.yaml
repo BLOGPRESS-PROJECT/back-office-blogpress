@@ -31,11 +31,12 @@ services:
       - certbot-certs:/etc/letsencrypt:ro
 
       # Challenge Certbot (read-only)
-      - certbot-www:/var/www/certbot:ro
+      - certbot-www:/var/www/certbot:rw
 
     # Réseau
     networks:
       - blogpress-network
+      - kobecorp-network
 
     # Health check
     healthcheck:
@@ -109,3 +110,7 @@ networks:
   blogpress-network:
     name: blogpress-network
     external: true  # Réseau créé par setup-db
+
+  kobecorp-network:
+    name: kobecorp-network
+    external: true  # Réseau créé par KobeCorporation
