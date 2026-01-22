@@ -704,7 +704,7 @@ jobs:
     name: 🧪 Test Docker Image
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name != 'pull_request'  # Skip tests sur PR
+    if: needs.build.result == 'success'  # Lance les tests si le build réussit (y compris sur PR)
     
     steps:
       # Étape 1: Checkout
