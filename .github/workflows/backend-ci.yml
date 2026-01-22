@@ -1,4 +1,4 @@
-name: 🐳 Build & Push Docker Image
+name: Deploy Blogpress App & Reverse Proxy
 
 # ==========================================
 # DÉCLENCHEMENT
