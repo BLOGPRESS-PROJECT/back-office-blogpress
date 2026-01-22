@@ -826,7 +826,11 @@ jobs:
     name: 🚀 Deploy to Production VPS
     runs-on: ubuntu-latest
     needs: [build, build-nginx]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: |
+      github.event_name == 'push' && 
+      github.ref == 'refs/heads/master' &&
+      needs.build.result == 'success' &&
+      needs.build-nginx.result == 'success'
     
     steps:
       # Étape 1: Checkout du code
@@ -1405,7 +1409,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [tags, build, build-nginx]
     if: |
-      github.event_name != 'pull_request' && 
+      github.event_name == 'push' && 
       github.ref == 'refs/heads/master' &&
       needs.tags.outputs.tag_created == 'true' &&
       needs.build.result == 'success' &&
