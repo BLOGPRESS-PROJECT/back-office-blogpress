@@ -178,7 +178,7 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-
+            type=sha,format=short,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
       
       # Étape 5: Build Docker Image (le contexte "." existe maintenant)
@@ -194,14 +194,37 @@ jobs:
           TAGS="${{ steps.meta.outputs.tags }}"
           if [ -z "$TAGS" ]; then
             # Fallback si metadata-action ne fonctionne pas
-            TAGS="${{ env.DOCKER_IMAGE }}:latest ${{ env.DOCKER_IMAGE }}:${{ github.sha }}"
+            TAGS="${{ env.DOCKER_IMAGE }}:latest ${{ env.DOCKER_IMAGE }}:sha-${{ github.sha }}"
+          fi
+          
+          # Filtrer et valider les tags (supprimer les tags invalides)
+          VALID_TAGS=""
+          for tag in $TAGS; do
+            # Vérifier que le tag est valide :
+            # - Doit contenir un : (format image:tag)
+            # - La partie après : ne doit pas commencer par - ou être vide
+            # - Ne doit pas contenir de caractères invalides
+            if [[ "$tag" =~ ^[^:]+:[^:-] ]] && [[ ! "$tag" =~ ^[^:]+:- ]] && [[ -n "$tag" ]]; then
+              VALID_TAGS="$VALID_TAGS $tag"
+              echo "✅ Tag valide: $tag"
+            else
+              echo "⚠️ Tag invalide ignoré: $tag"
+            fi
+          done
+          
+          # Vérifier qu'il reste au moins un tag valide
+          if [ -z "$VALID_TAGS" ]; then
+            echo "❌ Aucun tag valide trouvé, utilisation du fallback"
+            VALID_TAGS="${{ env.DOCKER_IMAGE }}:latest ${{ env.DOCKER_IMAGE }}:sha-${{ github.sha }}"
           fi
           
           # Construire les arguments --tag
           TAG_ARGS=""
-          for tag in $TAGS; do
+          for tag in $VALID_TAGS; do
             TAG_ARGS="$TAG_ARGS --tag $tag"
           done
+          
+          echo "📦 Tags finaux à utiliser: $VALID_TAGS"
           
           # Construire l'image (le contexte "." devrait maintenant exister)
           # Utiliser --pull pour forcer le pull des images de base avec authentification
@@ -213,7 +236,7 @@ jobs:
           
           # Push l'image si ce n'est pas une PR
           if [ "${{ github.event_name }}" != "pull_request" ]; then
-            for tag in $TAGS; do
+            for tag in $VALID_TAGS; do
               echo "Pushing $tag..."
               docker push $tag
             done
@@ -381,7 +404,7 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-
+            type=sha,format=short,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
       
       # Étape 5: Build Docker Image Nginx
@@ -393,14 +416,37 @@ jobs:
           TAGS="${{ steps.meta-nginx.outputs.tags }}"
           if [ -z "$TAGS" ]; then
             # Fallback si metadata-action ne fonctionne pas
-            TAGS="${{ env.NGINX_IMAGE }}:latest ${{ env.NGINX_IMAGE }}:${{ github.sha }}"
+            TAGS="${{ env.NGINX_IMAGE }}:latest ${{ env.NGINX_IMAGE }}:sha-${{ github.sha }}"
+          fi
+          
+          # Filtrer et valider les tags (supprimer les tags invalides)
+          VALID_TAGS=""
+          for tag in $TAGS; do
+            # Vérifier que le tag est valide :
+            # - Doit contenir un : (format image:tag)
+            # - La partie après : ne doit pas commencer par - ou être vide
+            # - Ne doit pas contenir de caractères invalides
+            if [[ "$tag" =~ ^[^:]+:[^:-] ]] && [[ ! "$tag" =~ ^[^:]+:- ]] && [[ -n "$tag" ]]; then
+              VALID_TAGS="$VALID_TAGS $tag"
+              echo "✅ Tag valide: $tag"
+            else
+              echo "⚠️ Tag invalide ignoré: $tag"
+            fi
+          done
+          
+          # Vérifier qu'il reste au moins un tag valide
+          if [ -z "$VALID_TAGS" ]; then
+            echo "❌ Aucun tag valide trouvé, utilisation du fallback"
+            VALID_TAGS="${{ env.NGINX_IMAGE }}:latest ${{ env.NGINX_IMAGE }}:sha-${{ github.sha }}"
           fi
           
           # Construire les arguments --tag
           TAG_ARGS=""
-          for tag in $TAGS; do
+          for tag in $VALID_TAGS; do
             TAG_ARGS="$TAG_ARGS --tag $tag"
           done
+          
+          echo "📦 Tags finaux à utiliser: $VALID_TAGS"
           
           # Construire l'image Nginx
           docker build \
@@ -411,7 +457,7 @@ jobs:
           
           # Push l'image si ce n'est pas une PR
           if [ "${{ github.event_name }}" != "pull_request" ]; then
-            for tag in $TAGS; do
+            for tag in $VALID_TAGS; do
               echo "Pushing $tag..."
               docker push $tag
             done
