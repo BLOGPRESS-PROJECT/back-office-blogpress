@@ -43,3 +43,11 @@ out/
 # Fichiers de configuration production (ne pas commiter)
 src/main/resources/application-prod.properties
 *.prod.properties
+
+### Environment ###
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
