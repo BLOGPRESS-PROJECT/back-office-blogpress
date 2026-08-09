@@ -48,6 +48,8 @@ src/main/resources/application-prod.properties
 .env
 .env.*
 !.env.example
+!.env.prod.example
 **/.env
 **/.env.*
 !**/.env.example
+!**/.env.prod.example

@@ -1,1176 +1,646 @@
-name: Deploy Blogpress App
+# =============================================================================
+# CI/CD — Blogpress API (Spring Boot / Kotlin + MongoDB)
+#
+# Triggers : push / PR / tags + workflow_dispatch.
+#
+# Pipeline :
+#   - develop (push) : s’arrête après docker-build (pas de push image / deploy)
+#   - main | master | tags | PR | workflow_dispatch : pipeline complet
+#     (push Docker Hub/GHCR → sign → deploy VPS → smoke)
+#
+# VPS : ~/blogpress/setup-api/
+#   - .env (manuel, depuis setup-api/.env.prod.example)
+#   - compose.prod.yaml (scp CI)
+# nginx API : api.blogpress-app.com → 127.0.0.1:8090
+# =============================================================================
 
-# ==========================================
-# DÉCLENCHEMENT
-# ==========================================
-# Ce workflow se déclenche :
-# - Sur push vers la branche master
-# - Sur pull request vers master (pour tester)
-# - Manuellement depuis l'onglet Actions (workflow_dispatch)
+name: CI/CD
+
 on:
+  workflow_dispatch:
   push:
     branches:
+      - main
       - master
+      - develop
+    tags:
+      - "v*.*.*"
   pull_request:
     branches:
+      - main
       - master
-  workflow_dispatch:  # Permet de déclencher manuellement depuis GitHub
+      - develop
 
-# ==========================================
-# PERMISSIONS
-# ==========================================
+concurrency:
+  group: cicd-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
-  contents: write  # Nécessaire pour créer des releases et pousser des tags
-  packages: write  # Nécessaire pour pousser des images Docker
+  contents: read
 
-# ==========================================
-# VARIABLES GLOBALES
-# ==========================================
 env:
-  DOCKER_IMAGE: azerty78/blogpress-api
-  DOCKERFILE_PATH: setup-api/Dockerfile
-  DOCKER_CONTEXT: .
+  JAVA_VERSION: "21"
+  IMAGE_API: blogpress-api
+  TRUFFLEHOG_VERSION: "3.95.3"
+  MONGO_IMAGE: mongo:7.0
 
-# ==========================================
-# JOBS
-# ==========================================
 jobs:
-  # ==========================================
-  # JOB 1: Create Git Tags
-  # ==========================================
-  tags:
-    name: 🏷️ Create Git Tags
+  tag:
+    name: Compute version tag
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
-      tag_created: ${{ steps.finalize.outputs.created }}
-      tag_name: ${{ steps.finalize.outputs.name }}
-      tag_type: ${{ steps.finalize.outputs.type }}
-      is_release: ${{ steps.finalize.outputs.is_release }}
-      semantic_version: ${{ steps.finalize.outputs.semantic_version }}
-    
+      version: ${{ steps.compute.outputs.version }}
+      docker_tag: ${{ steps.compute.outputs.docker_tag }}
+      short_sha: ${{ steps.compute.outputs.short_sha }}
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: ⚙️ Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-      
-      - name: 📋 Extract Version & Info
-        id: version
-        run: |
-          echo "✅ Informations sur les tags Git"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📌 Ref: ${{ github.ref }}"
-          echo "🔖 SHA: ${{ github.sha }}"
-          echo "🌿 Branch: ${{ github.ref_name }}"
-          echo "👤 Auteur: $(git log -1 --pretty=%an)"
-          echo "📅 Date: $(git log -1 --pretty=%cd --date=format:%Y-%m-%d\ %H:%M:%S)"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          
-          # Lire la version depuis build.gradle.kts (méthode bash pure)
-          if [ -f "build.gradle.kts" ]; then
-            # Extraire la version avec grep et sed (format: version = "0.0.1-SNAPSHOT")
-            GRADLE_VERSION=$(grep -m 1 '^version\s*=' build.gradle.kts | sed -E 's/.*version\s*=\s*["'\'']([^"'\'']*)["'\''].*/\1/' | sed 's/-SNAPSHOT//')
-            if [ -z "$GRADLE_VERSION" ]; then
-              GRADLE_VERSION="0.0.0"
-            fi
-            echo "📦 Version build.gradle.kts: $GRADLE_VERSION"
-            echo "version=$GRADLE_VERSION" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ build.gradle.kts non trouvé, utilisation de la version par défaut"
-            echo "version=0.0.0" >> $GITHUB_OUTPUT
-          fi
-          
-          # Afficher les 10 derniers tags
-          echo ""
-          echo "📋 Tags existants (10 derniers):"
-          git tag -l --sort=-version:refname | head -10 || echo "  Aucun tag trouvé"
-          
-          # Afficher les informations du commit
-          echo ""
-          echo "📝 Dernier commit:"
-          echo "  SHA: $(git log -1 --pretty=%H)"
-          COMMIT_MSG_FIRST_LINE=$(git log -1 --pretty=%B | head -n 1)
-          echo "  Message: $COMMIT_MSG_FIRST_LINE"
-          echo "  Auteur: $(git log -1 --pretty='%an <%ae>')"
-      
-      - name: 📊 Analyze Changes
-        id: changes
-        run: |
-          echo "📊 Analyse des changements:"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          
-          # Compter les fichiers modifiés
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            FILES_CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | wc -l)
-            echo "📁 Fichiers modifiés: $FILES_CHANGED"
-            
-            # Afficher les types de changements
-            echo ""
-            echo "📝 Types de changements:"
-            git diff --name-status ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | \
-              awk '{print "  " $1 " " $2}' | head -20 || echo "  Aucun changement détecté"
-          else
-            # Pour les pushes, comparer avec le commit précédent
-            PREV_SHA=$(git rev-parse HEAD~1 2>/dev/null || echo "")
-            if [ -n "$PREV_SHA" ]; then
-              FILES_CHANGED=$(git diff --name-only $PREV_SHA ${{ github.sha }} | wc -l)
-              echo "📁 Fichiers modifiés: $FILES_CHANGED"
-              
-              echo ""
-              echo "📝 Types de changements:"
-              git diff --name-status $PREV_SHA ${{ github.sha }} | \
-                awk '{print "  " $1 " " $2}' | head -20 || echo "  Aucun changement détecté"
-            else
-              echo "ℹ️ Premier commit de la branche"
-            fi
-          fi
-          
-          # Détecter le type de changement (feat, fix, etc.)
-          COMMIT_MSG=$(git log -1 --pretty=%B)
-          if echo "$COMMIT_MSG" | grep -qiE "^(feat|feature)"; then
-            CHANGE_TYPE="✨ Feature"
-          elif echo "$COMMIT_MSG" | grep -qiE "^(fix|bugfix)"; then
-            CHANGE_TYPE="🐛 Fix"
-          elif echo "$COMMIT_MSG" | grep -qiE "^(refactor)"; then
-            CHANGE_TYPE="♻️ Refactor"
-          elif echo "$COMMIT_MSG" | grep -qiE "^(docs|documentation)"; then
-            CHANGE_TYPE="📚 Documentation"
-          elif echo "$COMMIT_MSG" | grep -qiE "^(test)"; then
-            CHANGE_TYPE="🧪 Test"
-          elif echo "$COMMIT_MSG" | grep -qiE "^(chore)"; then
-            CHANGE_TYPE="🔧 Chore"
-          else
-            CHANGE_TYPE="📝 Update"
-          fi
-          
-          echo ""
-          echo "🏷️ Type de changement détecté: $CHANGE_TYPE"
-          echo "change_type=$CHANGE_TYPE" >> $GITHUB_OUTPUT
-      
-      - name: 🏷️ Create Git Tag
-        id: tag
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          SHA="${{ github.sha }}"
-          BRANCH="${{ github.ref_name }}"
-          COMMIT_MSG=$(git log -1 --pretty=%B)
-          AUTHOR=$(git log -1 --pretty=%an)
-          DATE=$(git log -1 --pretty=%cd --date=format:%Y-%m-%d\ %H:%M:%S)
-          SHORT_SHA=$(echo $SHA | cut -c1-7)
-          
-          # Détecter le type de changement pour déterminer le type de tag
-          CHANGE_TYPE="${{ steps.changes.outputs.change_type }}"
-          
-          # Si la version est 0.0.0, créer un tag de développement
-          # Sinon, créer un tag sémantique (v1.0.0, v1.1.0, etc.)
-          if [ "$VERSION" = "0.0.0" ]; then
-            # Tag de développement avec SHA et timestamp
-            TIMESTAMP=$(date +%Y%m%d%H%M%S)
-            TAG_NAME="dev-${SHORT_SHA}-${TIMESTAMP}"
-            TAG_TYPE="development"
-            echo "🔧 Création d'un tag de développement: $TAG_NAME"
-          else
-            # Tag sémantique basé sur la version (v1.0.0, v1.1.0, etc.)
-            TAG_NAME="v${VERSION}"
-            TAG_TYPE="semantic"
-            
-            # Vérifier si le tag sémantique existe déjà
-            if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
-              echo "⚠️ Le tag sémantique $TAG_NAME existe déjà"
-              echo "ℹ️ Utilisation d'un tag de développement à la place"
-              TIMESTAMP=$(date +%Y%m%d%H%M%S)
-              TAG_NAME="dev-${SHORT_SHA}-${TIMESTAMP}"
-              TAG_TYPE="development"
-            else
-              echo "🎉 Création d'un tag sémantique: $TAG_NAME"
-            fi
-          fi
-          
-          # Créer le message du tag enrichi
-          TAG_MESSAGE="Release $TAG_NAME - Version: $VERSION - Commit: $SHA - Branch: $BRANCH - Auteur: $AUTHOR - Date: $DATE - Type: $TAG_TYPE - Changement: $CHANGE_TYPE - Message: $COMMIT_MSG - Généré automatiquement par GitHub Actions"
-          
-          # Créer le tag annoté
-          git tag -a "$TAG_NAME" -m "$TAG_MESSAGE" "$SHA"
-          
-          echo "✅ Tag créé: $TAG_NAME"
-          echo "name=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "created=true" >> $GITHUB_OUTPUT
-          echo "type=$TAG_TYPE" >> $GITHUB_OUTPUT
-          
-          # Détecter si c'est une release sémantique (version != 0.0.0 et tag sémantique)
-          if [ "$VERSION" != "0.0.0" ] && [ "$TAG_TYPE" = "semantic" ]; then
-            echo "is_release=true" >> $GITHUB_OUTPUT
-            echo "semantic_version=$VERSION" >> $GITHUB_OUTPUT
-            echo "🎉 Release sémantique détectée (version: $VERSION)"
-          else
-            echo "is_release=false" >> $GITHUB_OUTPUT
-            echo "semantic_version=" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: 📋 Finalize Tag Outputs
-        id: finalize
-        if: always()
-        run: |
-          # Si le tag n'a pas été créé, utiliser les valeurs par défaut
-          if [ "${{ steps.tag.outputs.created }}" != "true" ]; then
-            echo "ℹ️ Aucun tag créé (PR ou branche non principale)"
-            echo "name=" >> $GITHUB_OUTPUT
-            echo "created=false" >> $GITHUB_OUTPUT
-            echo "type=" >> $GITHUB_OUTPUT
-            echo "is_release=false" >> $GITHUB_OUTPUT
-            echo "semantic_version=" >> $GITHUB_OUTPUT
-          else
-            # Utiliser les valeurs du step tag
-            echo "name=${{ steps.tag.outputs.name }}" >> $GITHUB_OUTPUT
-            echo "created=${{ steps.tag.outputs.created }}" >> $GITHUB_OUTPUT
-            echo "type=${{ steps.tag.outputs.type }}" >> $GITHUB_OUTPUT
-            echo "is_release=${{ steps.tag.outputs.is_release }}" >> $GITHUB_OUTPUT
-            echo "semantic_version=${{ steps.tag.outputs.semantic_version }}" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: 🚀 Push Tags
-        if: steps.tag.outputs.created == 'true'
-        run: |
-          TAG_NAME="${{ steps.tag.outputs.name }}"
-          echo "🚀 Push du tag $TAG_NAME vers le dépôt..."
-          git push origin "$TAG_NAME" || {
-            echo "⚠️ Erreur lors du push du tag, peut-être qu'il existe déjà sur le serveur"
-            exit 0  # Ne pas faire échouer le workflow si le tag existe déjà
-          }
-          echo "✅ Tag $TAG_NAME poussé avec succès"
-      
-      - name: 📋 Summary
-        run: |
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📋 RÉSUMÉ DU JOB TAGS"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "✅ Version: ${{ steps.version.outputs.version }}"
-          if [ "${{ steps.tag.outputs.created }}" == "true" ]; then
-            echo "✅ Tag créé: ${{ steps.tag.outputs.name }}"
-            echo "🏷️  Type de tag: ${{ steps.tag.outputs.type }}"
-            if [ "${{ steps.tag.outputs.is_release }}" == "true" ]; then
-              echo "🎉 Release sémantique: ${{ steps.tag.outputs.semantic_version }}"
-              echo "📦 L'image Docker sera taggée avec: ${{ steps.tag.outputs.name }}"
-              echo "🚀 Une release GitHub sera créée automatiquement"
-            else
-              echo "🔧 Tag de développement créé"
-            fi
-          else
-            echo "ℹ️ Aucun tag créé (PR ou branche non principale)"
-          fi
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  # ==========================================
-  # JOB 2: Run Tests
-  # ==========================================
-  test:
-    name: 🧪 Tests Gradle
+      - name: Compute version and docker tag
+        id: compute
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::7}"
+
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          elif [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            VERSION="pr-${{ github.event.pull_request.number }}-${SHORT_SHA}"
+          else
+            BRANCH="${GITHUB_REF_NAME//\//-}"
+            VERSION="${BRANCH}-${SHORT_SHA}"
+          fi
+
+          DOCKER_TAG="$(echo "${VERSION}" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9._-' '-' | sed 's/^[.-]*//' | cut -c1-128)"
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "docker_tag=${DOCKER_TAG}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Version"
+            echo "- Version: \`${VERSION}\`"
+            echo "- Docker tag: \`${DOCKER_TAG}\`"
+            echo "- Short SHA: \`${SHORT_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  compile:
+    name: Compile Kotlin
     runs-on: ubuntu-latest
-
+    needs: tag
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: ☕ Setup JDK 21
+      - name: Set up JDK
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
 
-      - name: 💾 Cache Gradle
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: 🔧 Make gradlew executable
+      - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: 🧪 Run tests
-        run: ./gradlew clean test
+      - name: Compile
+        run: ./gradlew compileKotlin --no-daemon
 
-  # ==========================================
-  # JOB 3: Build Docker Image
-  # ==========================================
-  build:
-    needs: [tags, test]
-    name: 🔨 Build & Push Docker Image
+  unit-tests:
+    name: Unit tests
     runs-on: ubuntu-latest
-    
+    needs: tag
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 10s
     steps:
-      # Étape 1: Checkout du code
-      - name: 📥 Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v5
-      
-      # Étape 2: Nettoyer et recréer les contextes Docker correctement
-      - name: 🧹 Setup Docker Properly
-        run: |
-          # Supprimer buildx et contextes corrompus
-          rm -rf ~/.docker/buildx 2>/dev/null || true
-          rm -rf ~/.docker/contexts 2>/dev/null || true
-          
-          # Recréer la structure de contextes correctement
-          mkdir -p ~/.docker/contexts/meta
-          
-          # Créer le répertoire pour le contexte "." (hash de l'erreur)
-          CONTEXT_DIR=~/.docker/contexts/meta/cdb4ee2aea69cc6a83331bbe96dc2caa9a299d21329efb0336fc02a82e1839a8
-          mkdir -p "$CONTEXT_DIR"
-          
-          # Créer le fichier meta.json pour le contexte "."
-          cat > "$CONTEXT_DIR/meta.json" <<'EOF'
-          {
-            "Name": ".",
-            "Metadata": {
-              "Description": "Default context"
-            },
-            "Endpoints": {
-              "docker": {
-                "Host": "unix:///var/run/docker.sock",
-                "SkipTLSVerify": false
-              }
-            }
-          }
-          EOF
-          
-          # Vérifier que le fichier a été créé
-          if [ -f "$CONTEXT_DIR/meta.json" ]; then
-            echo "✅ Contexte Docker '.' créé avec succès"
-          else
-            echo "❌ Erreur: Impossible de créer le contexte"
-            exit 1
-          fi
-      
-      # Étape 3: Login à DockerHub 
-      - name: 🔐 Login to DockerHub
-        uses: docker/login-action@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
-      
-      # Étape 3b: Vérifier le login
-      - name: ✅ Verify DockerHub Login
-        run: |
-          echo "✅ Login DockerHub réussi"
-          
-          # Test: essayer de pull gradle:8.14.3-jdk21 pour vérifier l'authentification
-          echo "Test: Pull de gradle:8.14.3-jdk21..."
-          docker pull gradle:8.14.3-jdk21 || {
-            echo "❌ Erreur: Impossible de pull gradle:8.14.3-jdk21"
-            echo "Vérification du config.json..."
-            cat ~/.docker/config.json || echo "⚠️ Pas de config.json"
-            exit 1
-          }
-          echo "✅ Pull de gradle:8.14.3-jdk21 réussi"
-      
-      # Étape 4: Extract metadata (tags, labels) avec intégration des tags Git
-      - name: 📋 Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.DOCKER_IMAGE }}
-          tags: |
-            # Tags Git (prioritaires si disponibles)
-            type=raw,value=${{ needs.tags.outputs.tag_name }},enable=${{ needs.tags.outputs.tag_created == 'true' && needs.tags.outputs.tag_name != '' }}
-            # Tags sémantiques basés sur la version
-            type=semver,pattern={{version}},enable=${{ needs.tags.outputs.is_release == 'true' }}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ needs.tags.outputs.is_release == 'true' }}
-            # Tags de branche (fallback)
-            type=ref,event=branch
-            # Tag SHA avec préfixe de branche (fallback)
-            type=sha,format=short,prefix=sha-
-            # Tag latest uniquement sur la branche principale
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
-            # Tags pour les PRs
-            type=ref,event=pr
-      
-      # Étape 5: Build Docker Image (le contexte "." existe maintenant)
-      - name: 🔨 Build Docker Image
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Run tests
         env:
-          DOCKER_BUILDKIT: 0
-        run: |
-          # Vérifier que le login fonctionne
-          echo "Vérification de l'authentification DockerHub..."
-          docker info | grep -i "username" || echo "⚠️ Pas de username dans docker info (peut être normal)"
-          
-          # Préparer les tags
-          TAGS="${{ steps.meta.outputs.tags }}"
-          if [ -z "$TAGS" ]; then
-            # Fallback si metadata-action ne fonctionne pas
-            TAGS="${{ env.DOCKER_IMAGE }}:latest ${{ env.DOCKER_IMAGE }}:sha-${{ github.sha }}"
-          fi
-          
-          # Filtrer et valider les tags (supprimer les tags invalides)
-          VALID_TAGS=""
-          for tag in $TAGS; do
-            # Vérifier que le tag est valide :
-            # - Doit contenir un : (format image:tag)
-            # - La partie après : ne doit pas commencer par - ou être vide
-            # - Ne doit pas contenir de caractères invalides
-            if [[ "$tag" =~ ^[^:]+:[^:-] ]] && [[ ! "$tag" =~ ^[^:]+:- ]] && [[ -n "$tag" ]]; then
-              VALID_TAGS="$VALID_TAGS $tag"
-              echo "✅ Tag valide: $tag"
-            else
-              echo "⚠️ Tag invalide ignoré: $tag"
-            fi
-          done
-          
-          # Vérifier qu'il reste au moins un tag valide
-          if [ -z "$VALID_TAGS" ]; then
-            echo "❌ Aucun tag valide trouvé, utilisation du fallback"
-            VALID_TAGS="${{ env.DOCKER_IMAGE }}:latest ${{ env.DOCKER_IMAGE }}:sha-${{ github.sha }}"
-          fi
-          
-          # Construire les arguments --tag
-          TAG_ARGS=""
-          for tag in $VALID_TAGS; do
-            TAG_ARGS="$TAG_ARGS --tag $tag"
-          done
-          
-          echo "📦 Tags finaux à utiliser: $VALID_TAGS"
-          
-          # Construire l'image (le contexte "." devrait maintenant exister)
-          # Utiliser --pull pour forcer le pull des images de base avec authentification
-          docker build \
-            --pull \
-            --file ${{ env.DOCKERFILE_PATH }} \
-            $TAG_ARGS \
-            ${{ env.DOCKER_CONTEXT }}
-          
-          # Push l'image si ce n'est pas une PR
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            for tag in $VALID_TAGS; do
-              echo "Pushing $tag..."
-              docker push $tag
-            done
-          fi
-      
-      # Étape 6: Afficher les informations de l'image
-      - name: 📊 Image Info
-        if: success()
-        run: |
-          echo "✅ Image buildée avec succès!"
-          echo "📦 Image: ${{ env.DOCKER_IMAGE }}"
-          echo "🏷️  Tags: ${{ steps.meta.outputs.tags }}"
-          docker images | grep "${{ env.DOCKER_IMAGE }}"
-  
-  # ==========================================
-  # JOB 4: Test Docker Image (optionnel pour l'instant)
-  # ==========================================
-  test-image:
-    name: 🧪 Test Docker Image
-    runs-on: ubuntu-latest
-    needs: build
-    if: needs.build.result == 'success'  # Lance les tests si le build réussit (y compris sur PR)
-    
-    steps:
-      # Étape 1: Checkout
-      - name: 📥 Checkout code
-        uses: actions/checkout@v5
-      
-      # Étape 2: Nettoyer et recréer les contextes Docker correctement
-      - name: 🧹 Setup Docker Properly
-        run: |
-          # Supprimer buildx et contextes corrompus
-          rm -rf ~/.docker/buildx 2>/dev/null || true
-          rm -rf ~/.docker/contexts 2>/dev/null || true
-          
-          # Recréer la structure de contextes correctement
-          mkdir -p ~/.docker/contexts/meta
-          
-          # Créer le répertoire pour le contexte "." (hash de l'erreur)
-          CONTEXT_DIR=~/.docker/contexts/meta/cdb4ee2aea69cc6a83331bbe96dc2caa9a299d21329efb0336fc02a82e1839a8
-          mkdir -p "$CONTEXT_DIR"
-          
-          # Créer le fichier meta.json pour le contexte "."
-          cat > "$CONTEXT_DIR/meta.json" <<'EOF'
-          {
-            "Name": ".",
-            "Metadata": {
-              "Description": "Default context"
-            },
-            "Endpoints": {
-              "docker": {
-                "Host": "unix:///var/run/docker.sock",
-                "SkipTLSVerify": false
-              }
-            }
-          }
-          EOF
-          
-          # Vérifier que le fichier a été créé
-          if [ -f "$CONTEXT_DIR/meta.json" ]; then
-            echo "✅ Contexte Docker '.' créé avec succès"
-          else
-            echo "❌ Erreur: Impossible de créer le contexte"
-            exit 1
-          fi
-      
-      # Étape 3: Login à DockerHub
-      - name: 🔐 Login to DockerHub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
-      
-      # Étape 4: Pull l'image buildée
-      - name: 🐳 Pull Docker Image
-        run: |
-          docker pull ${{ env.DOCKER_IMAGE }}:latest || echo "Image not found, will build locally"
-      
-      # Étape 5: Test basique (vérifier que le conteneur démarre)
-      - name: ✅ Test Container Start
-        run: |
-          # Démarrer le conteneur
-          echo "🚀 Démarrage du conteneur..."
-          docker run -d --name test-container -p 8090:8090 ${{ env.DOCKER_IMAGE }}:latest || docker run -d --name test-container -p 8090:8090 ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
-          
-          # Attendre un peu que le conteneur démarre
-          echo "⏳ Attente du démarrage du conteneur..."
-          sleep 10
-          
-          # Vérifier que le conteneur est en cours d'exécution
-          echo "📊 État du conteneur:"
-          docker ps --filter "name=test-container" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-          
-          # Vérifier que le conteneur est toujours en vie (pas de crash)
-          CONTAINER_STATUS=$(docker inspect -f '{{.State.Status}}' test-container 2>/dev/null || echo "not-found")
-          if [ "$CONTAINER_STATUS" != "running" ]; then
-            echo "❌ Le conteneur n'est pas en cours d'exécution. Statut: $CONTAINER_STATUS"
-            echo "📋 Logs du conteneur:"
-            docker logs test-container --tail 100
-            echo "📊 État détaillé:"
-            docker ps -a --filter "name=test-container"
-            exit 1
-          fi
-          
-          # Vérifier que le port est accessible (même si l'API ne répond pas correctement sans MongoDB)
-          echo "🔍 Vérification de l'accessibilité du port 8090..."
-          if timeout 5 bash -c 'until nc -z localhost 8090; do sleep 1; done' 2>/dev/null; then
-            echo "✅ Le port 8090 est accessible"
-          else
-            echo "⚠️ Le port 8090 n'est pas encore accessible (peut être normal si l'API démarre encore)"
-          fi
-          
-          # Vérifier que l'application Spring Boot démarre (en regardant les logs)
-          echo "📋 Vérification des logs de démarrage..."
-          LOGS=$(docker logs test-container 2>&1 | tail -20)
-          echo "$LOGS"
-          
-          # Vérifier qu'il n'y a pas d'erreur fatale dans les logs
-          if echo "$LOGS" | grep -i "error\|exception\|failed" | grep -v "MongoSocketOpenException\|Connection refused" | head -5; then
-            echo "⚠️ Des erreurs ont été détectées dans les logs (mais pas bloquantes si ce sont des erreurs de connexion MongoDB)"
-          fi
-          
-          # Vérifier que Spring Boot a commencé à démarrer
-          if echo "$LOGS" | grep -i "started\|application\|spring" > /dev/null; then
-            echo "✅ L'application Spring Boot a commencé à démarrer"
-          else
-            echo "⚠️ L'application Spring Boot ne semble pas avoir démarré (vérifiez les logs ci-dessus)"
-          fi
-          
-          echo "✅ Test du conteneur terminé avec succès!"
-          echo "ℹ️ Note: Le health check nécessite MongoDB qui n'est pas disponible dans ce test CI"
-          
-          # Nettoyage
-          docker stop test-container || true
-          docker rm test-container || true
+          # Mongo CI sans auth (service officiel)
+          SPRING_DATA_MONGODB_URI: mongodb://localhost:27017/blogpress
+        run: ./gradlew test --no-daemon
 
-  # ==========================================
-  # JOB 5: Deploy to VPS
-  # ==========================================
-  deploy:
-    name: 🚀 Deploy to Production VPS
+  secret-scan:
+    name: Secret scan (TruffleHog)
     runs-on: ubuntu-latest
-    needs: [build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    
     steps:
-      # Étape 1: Checkout du code
-      - name: 📥 Checkout code
-        uses: actions/checkout@v5
-      
-      # Étape 2: Setup SSH
-      - name: 🔐 Setup SSH
-        uses: webfactory/ssh-agent@v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
-      
-      # Étape 3: Configurer SSH avec le port personnalisé
-      - name: 🔧 Configure SSH
-        run: |
-          # Créer le fichier de config SSH
-          mkdir -p ~/.ssh
-          cat >> ~/.ssh/config << EOF
-          Host vps-deploy
-            HostName ${{ secrets.VPS_HOST }}
-            User ${{ secrets.VPS_USERNAME }}
-            Port ${{ secrets.VPS_PORT || 22 }}
-            StrictHostKeyChecking no
-            UserKnownHostsFile=/dev/null
-          EOF
-          
-          # Ajouter le serveur aux known hosts
-          ssh-keyscan -p ${{ secrets.VPS_PORT || 22 }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
-      
-      # Étape 4: Vérifier et installer Docker sur le VPS
-      - name: 🐳 Ensure Docker is installed and running
-        run: |
-          # Recréer le fichier de config SSH pour cette étape
-          mkdir -p ~/.ssh
-          cat > ~/.ssh/config << EOF
-          Host vps-deploy
-            HostName ${{ secrets.VPS_HOST }}
-            User ${{ secrets.VPS_USERNAME }}
-            Port ${{ secrets.VPS_PORT || 22 }}
-            StrictHostKeyChecking no
-            UserKnownHostsFile=/dev/null
-          EOF
-          chmod 600 ~/.ssh/config
-          
-          ssh -F ~/.ssh/config vps-deploy << 'EOF'
-            set -e
-            
-            echo "🔍 Vérification de Docker..."
-            
-            # Vérifier si sudo fonctionne sans mot de passe (mode non-interactif)
-            # Note: L'utilisateur doit avoir configuré NOPASSWD pour sudo
-            if sudo -n true 2>/dev/null; then
-              SUDO_CMD="sudo"
-              echo "✅ Sudo fonctionne sans mot de passe"
-            else
-              echo ""
-              echo "❌ ERREUR: Sudo nécessite un mot de passe"
-              echo ""
-              echo "📋 SOLUTION: Configurez sudo pour fonctionner sans mot de passe sur le VPS"
-              echo ""
-              echo "🔧 Étapes à suivre sur le VPS:"
-              echo "   1. Connectez-vous au VPS: ssh $USER@${{ secrets.VPS_HOST }}"
-              echo "   2. Exécutez cette commande (remplacez USERNAME par votre nom d'utilisateur):"
-              echo "      echo 'USERNAME ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/USERNAME"
-              echo "   3. Vérifiez: sudo visudo -c"
-              echo "   4. Testez: sudo -n true && echo 'OK'"
-              echo ""
-              echo "📚 Guide complet: Voir VPS-SUDO-SETUP.md dans le dépôt"
-              echo ""
-              echo "⚠️  IMPORTANT: Ne mettez JAMAIS le mot de passe sudo dans les secrets GitHub"
-              echo "   Utilisez NOPASSWD pour sudo (c'est la méthode sécurisée recommandée)"
-              echo ""
-              exit 1
-            fi
-            
-            # Vérifier si Docker est installé
-            if ! command -v docker &> /dev/null; then
-              echo "📦 Docker n'est pas installé, installation en cours..."
-              
-              # Détecter la distribution
-              if [ -f /etc/os-release ]; then
-                . /etc/os-release
-                OS=$ID
-              else
-                echo "❌ Impossible de détecter la distribution"
-                exit 1
-              fi
-              
-              # Installation selon la distribution
-              if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
-                # Mettre à jour les paquets
-                $SUDO_CMD apt-get update -qq
-                
-                # Installer les dépendances
-                $SUDO_CMD apt-get install -y -qq \
-                  ca-certificates \
-                  curl \
-                  gnupg \
-                  lsb-release
-                
-                # Ajouter la clé GPG Docker
-                $SUDO_CMD mkdir -p /etc/apt/keyrings
-                curl -fsSL https://download.docker.com/linux/$OS/gpg | $SUDO_CMD gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-                
-                # Ajouter le repository Docker
-                echo \
-                  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$OS \
-                  $(lsb_release -cs) stable" | $SUDO_CMD tee /etc/apt/sources.list.d/docker.list > /dev/null
-                
-                # Installer Docker
-                $SUDO_CMD apt-get update -qq
-                $SUDO_CMD apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
-                
-              elif [ "$OS" = "centos" ] || [ "$OS" = "rhel" ] || [ "$OS" = "fedora" ]; then
-                # Installation pour CentOS/RHEL/Fedora
-                $SUDO_CMD yum install -y -q yum-utils
-                $SUDO_CMD yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-                $SUDO_CMD yum install -y -q docker-ce docker-ce-cli containerd.io docker-compose-plugin
-                
-              else
-                echo "❌ Distribution non supportée: $OS"
-                exit 1
-              fi
-              
-              echo "✅ Docker installé"
-            else
-              echo "✅ Docker est déjà installé"
-              docker --version
-            fi
-            
-            # Vérifier si Docker est en cours d'exécution
-            if ! $SUDO_CMD systemctl is-active --quiet docker 2>/dev/null; then
-              echo "🚀 Démarrage de Docker..."
-              $SUDO_CMD systemctl start docker
-              $SUDO_CMD systemctl enable docker
-            else
-              echo "✅ Docker est déjà en cours d'exécution"
-            fi
-            
-            # Vérifier que l'utilisateur peut utiliser Docker sans sudo
-            if ! docker ps &> /dev/null; then
-              echo "👤 Ajout de l'utilisateur au groupe docker..."
-              $SUDO_CMD usermod -aG docker $USER
-              echo "⚠️  Note: L'utilisateur a été ajouté au groupe docker"
-              echo "⚠️  Vous devrez peut-être vous reconnecter pour que les changements prennent effet"
-              echo "⚠️  Pour cette session, Docker sera utilisé avec sudo si nécessaire"
-            else
-              echo "✅ Docker fonctionne sans sudo"
-            fi
-            
-            # Vérifier Docker Compose
-            if ! command -v docker compose &> /dev/null && ! command -v docker-compose &> /dev/null; then
-              echo "⚠️  Docker Compose n'est pas disponible, mais docker compose plugin devrait fonctionner"
-            else
-              echo "✅ Docker Compose est disponible"
-            fi
-            
-            echo "✅ Docker est prêt!"
-          EOF
-      
-      # Étape 5: Créer la structure de dossiers sur le VPS
-      - name: 📁 Create directory structure
-        run: |
-          # Recréer le fichier de config SSH pour cette étape
-          mkdir -p ~/.ssh
-          cat > ~/.ssh/config << EOF
-          Host vps-deploy
-            HostName ${{ secrets.VPS_HOST }}
-            User ${{ secrets.VPS_USERNAME }}
-            Port ${{ secrets.VPS_PORT || 22 }}
-            StrictHostKeyChecking no
-            UserKnownHostsFile=/dev/null
-          EOF
-          chmod 600 ~/.ssh/config
-          
-          ssh -F ~/.ssh/config vps-deploy << 'EOF'
-            set -e
-            
-            # Créer la structure de base
-            mkdir -p ~/blogpress/setup-api
-            
-            echo "✅ Structure de dossiers créée"
-          EOF
-      
-      # Étape 6: Copier les fichiers de configuration
-      - name: 📋 Copy configuration files
-        run: |
-          # Recréer le fichier de config SSH pour cette étape
-          mkdir -p ~/.ssh
-          cat > ~/.ssh/config << EOF
-          Host vps-deploy
-            HostName ${{ secrets.VPS_HOST }}
-            User ${{ secrets.VPS_USERNAME }}
-            Port ${{ secrets.VPS_PORT || 22 }}
-            StrictHostKeyChecking no
-            UserKnownHostsFile=/dev/null
-          EOF
-          chmod 600 ~/.ssh/config
-          
-          # Ajouter le serveur aux known hosts
-          ssh-keyscan -p ${{ secrets.VPS_PORT || 22 }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
-          
-          # Copier le docker-compose (API + MongoDB)
-          scp -F ~/.ssh/config setup-api/docker-compose.yaml vps-deploy:~/blogpress/setup-api/
-          
-          echo "✅ Fichiers de configuration copiés"
-      
-      # Étape 7: Mettre à jour les fichiers .env (en préservant les valeurs existantes)
-      - name: 🔐 Update .env files (preserve existing values)
-        run: |
-          # Recréer le fichier de config SSH pour cette étape
-          mkdir -p ~/.ssh
-          cat > ~/.ssh/config << EOF
-          Host vps-deploy
-            HostName ${{ secrets.VPS_HOST }}
-            User ${{ secrets.VPS_USERNAME }}
-            Port ${{ secrets.VPS_PORT || 22 }}
-            StrictHostKeyChecking no
-            UserKnownHostsFile=/dev/null
-          EOF
-          chmod 600 ~/.ssh/config
-          
-          ssh -F ~/.ssh/config vps-deploy << 'EOF'
-            set -e
-            
-            # Fonction pour définir une variable dans .env si elle est vide ou n'existe pas
-            set_env_if_empty() {
-              local file=$1
-              local key=$2
-              local default_value=$3
-              
-              # Créer le fichier s'il n'existe pas
-              touch "$file"
-              
-              # Vérifier si la clé existe déjà avec une valeur non vide
-              if grep -q "^${key}=" "$file" 2>/dev/null; then
-                local existing_value=$(grep "^${key}=" "$file" | cut -d'=' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-                if [ -n "$existing_value" ] && [ "$existing_value" != "" ]; then
-                  echo "✅ ${key} préservé: ${existing_value}"
-                  return 0
-                fi
-              fi
-              
-              # Si pas de valeur ou valeur vide, utiliser la valeur par défaut
-              if [ -n "$default_value" ]; then
-                # Retirer l'ancienne ligne si elle existe (vide)
-                sed -i "/^${key}=/d" "$file" 2>/dev/null || true
-                echo "${key}=${default_value}" >> "$file"
-                echo "➕ ${key}=${default_value}"
-              else
-                # S'assurer que la clé existe même vide
-                if ! grep -q "^${key}=" "$file" 2>/dev/null; then
-                  echo "${key}=" >> "$file"
-                  echo "➕ ${key} (vide)"
-                fi
-              fi
-            }
-            
-            echo "📝 Mise à jour des fichiers .env en préservant les valeurs existantes..."
-            
-            # Setup-API (MongoDB + application)
-            echo ""
-            echo "📦 Configuration setup-api/.env..."
-            set_env_if_empty ~/blogpress/setup-api/.env "SPRING_PROFILE" "prod"
-            set_env_if_empty ~/blogpress/setup-api/.env "API_PORT" "8090"
-            set_env_if_empty ~/blogpress/setup-api/.env "APP_BASE_URL" "https://api.blogpress-app.com"
-            set_env_if_empty ~/blogpress/setup-api/.env "APP_FRONTEND_URL" "https://www.blogpress-app.com"
-            set_env_if_empty ~/blogpress/setup-api/.env "ALLOWED_ORIGINS" "https://www.blogpress-app.com,https://blogpress-app.com"
-            set_env_if_empty ~/blogpress/setup-api/.env "MONGO_ROOT_USERNAME" "root"
-            set_env_if_empty ~/blogpress/setup-api/.env "MONGO_ROOT_PASSWORD" "qwerty87"
-            set_env_if_empty ~/blogpress/setup-api/.env "MONGO_DATABASE" "blogpress"
-            set_env_if_empty ~/blogpress/setup-api/.env "MONGO_PORT" "27017"
-            set_env_if_empty ~/blogpress/setup-api/.env "SPRING_DATA_MONGODB_URI" "mongodb://root:qwerty87@mongodb:27017/blogpress?authSource=admin"
-            set_env_if_empty ~/blogpress/setup-api/.env "MONGO_AUTO_INDEX" "true"
-            set_env_if_empty ~/blogpress/setup-api/.env "JWT_SECRET" "VGhpcyBpcyBhIHZlcnkgc2VjdXJlIGFuZCBsb25nIHNlY3JldCBrZXkgZm9yIEJsb2dwcmVzcyBBUEkgMjAyNQ=="
-            set_env_if_empty ~/blogpress/setup-api/.env "JWT_ACCESS_TOKEN_EXPIRATION" "3600000"
-            set_env_if_empty ~/blogpress/setup-api/.env "JWT_REFRESH_TOKEN_EXPIRATION" "604800000"
-            set_env_if_empty ~/blogpress/setup-api/.env "ADMIN_EMAIL" "admin@blogpress.com"
-            set_env_if_empty ~/blogpress/setup-api/.env "ADMIN_PASSWORD" "Admin@2025"
-            set_env_if_empty ~/blogpress/setup-api/.env "ADMIN_USERNAME" "admin"
-            set_env_if_empty ~/blogpress/setup-api/.env "ADMIN_FIRSTNAME" "Super"
-            set_env_if_empty ~/blogpress/setup-api/.env "ADMIN_LASTNAME" "Admin"
-            set_env_if_empty ~/blogpress/setup-api/.env "FILE_STORAGE_BASE_PATH" "/app/uploads"
-            set_env_if_empty ~/blogpress/setup-api/.env "FILE_STORAGE_MAX_FILE_SIZE" "5242880"
-            set_env_if_empty ~/blogpress/setup-api/.env "FILE_STORAGE_ALLOWED_TYPES" "image/jpeg,image/png,image/gif,image/webp"
-            set_env_if_empty ~/blogpress/setup-api/.env "MULTIPART_MAX_FILE_SIZE" "5MB"
-            set_env_if_empty ~/blogpress/setup-api/.env "MULTIPART_MAX_REQUEST_SIZE" "10MB"
-            set_env_if_empty ~/blogpress/setup-api/.env "LOG_LEVEL_ROOT" "INFO"
-            set_env_if_empty ~/blogpress/setup-api/.env "LOG_LEVEL_APP" "DEBUG"
-            set_env_if_empty ~/blogpress/setup-api/.env "LOG_LEVEL_MONGO" "INFO"
-            set_env_if_empty ~/blogpress/setup-api/.env "DEVTOOLS_ENABLED" "false"
-            set_env_if_empty ~/blogpress/setup-api/.env "JAVA_OPTS" "-Xms256m -Xmx512m"
-            set_env_if_empty ~/blogpress/setup-api/.env "DOCKERHUB_USERNAME" "azerty78"
-            
-            echo ""
-            echo "✅ Fichiers .env mis à jour (valeurs existantes préservées)"
-          EOF
-      
-      # Étape 8: Login à Docker Hub sur le VPS
-      - name: 🐳 Login to Docker Hub on VPS
-        run: |
-          # Recréer le fichier de config SSH pour cette étape
-          mkdir -p ~/.ssh
-          cat > ~/.ssh/config << EOF
-          Host vps-deploy
-            HostName ${{ secrets.VPS_HOST }}
-            User ${{ secrets.VPS_USERNAME }}
-            Port ${{ secrets.VPS_PORT || 22 }}
-            StrictHostKeyChecking no
-            UserKnownHostsFile=/dev/null
-          EOF
-          chmod 600 ~/.ssh/config
-          
-          ssh -F ~/.ssh/config vps-deploy << 'EOF'
-            set -e
-            
-            # Fonction pour déterminer la commande Docker à utiliser
-            get_docker_cmd() {
-              if docker ps &> /dev/null 2>&1; then
-                echo "docker"
-              else
-                echo "sudo docker"
-              fi
-            }
-            
-            DOCKER_CMD=$(get_docker_cmd)
-            echo "🔧 Utilisation de: $DOCKER_CMD"
-            
-            echo "${{ secrets.DOCKERHUB_PASSWORD }}" | $DOCKER_CMD login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-            echo "✅ Login Docker Hub réussi sur le VPS"
-          EOF
-      
-      # Étape 9: Déployer MongoDB + API (profil prod)
-      - name: 🚀 Deploy MongoDB & API
-        run: |
-          # Recréer le fichier de config SSH pour cette étape
-          mkdir -p ~/.ssh
-          cat > ~/.ssh/config << EOF
-          Host vps-deploy
-            HostName ${{ secrets.VPS_HOST }}
-            User ${{ secrets.VPS_USERNAME }}
-            Port ${{ secrets.VPS_PORT || 22 }}
-            StrictHostKeyChecking no
-            UserKnownHostsFile=/dev/null
-          EOF
-          chmod 600 ~/.ssh/config
-          
-          ssh -F ~/.ssh/config vps-deploy << 'EOF'
-            set -e
-            cd ~/blogpress/setup-api
-            
-            # Fonction pour déterminer la commande Docker à utiliser
-            get_docker_cmd() {
-              if docker ps &> /dev/null 2>&1; then
-                echo "docker"
-              else
-                echo "sudo docker"
-              fi
-            }
-            
-            DOCKER_CMD=$(get_docker_cmd)
-            
-            # Pull la nouvelle image API
-            echo "📥 Pull de la nouvelle image API..."
-            $DOCKER_CMD compose --profile prod pull
-            
-            # Démarrer MongoDB + API
-            echo "🚀 Démarrage MongoDB + API (profil prod)..."
-            $DOCKER_CMD compose --profile prod up -d --force-recreate
-            
-            # Attendre que les services soient prêts
-            echo "⏳ Attente que les services soient prêts..."
-            sleep 15
-            
-            # Vérifier le health check API
-            echo "🏥 Vérification du health check..."
-            for i in {1..30}; do
-              if curl -f http://localhost:8090/actuator/health 2>/dev/null; then
-                echo "✅ API est prête!"
-                break
-              fi
-              echo "⏳ Tentative $i/30..."
-              sleep 2
-            done
-            
-            # Nettoyer les anciennes images
-            $DOCKER_CMD image prune -f
-            
-            echo "✅ Déploiement MongoDB + API réussi"
-          EOF
-      
-      # Étape 10: Vérification finale
-      - name: ✅ Verify deployment
-        run: |
-          # Recréer le fichier de config SSH pour cette étape
-          mkdir -p ~/.ssh
-          cat > ~/.ssh/config << EOF
-          Host vps-deploy
-            HostName ${{ secrets.VPS_HOST }}
-            User ${{ secrets.VPS_USERNAME }}
-            Port ${{ secrets.VPS_PORT || 22 }}
-            StrictHostKeyChecking no
-            UserKnownHostsFile=/dev/null
-          EOF
-          chmod 600 ~/.ssh/config
-          
-          ssh -F ~/.ssh/config vps-deploy << 'EOF'
-            set -e
-            
-            # Fonction pour déterminer la commande Docker à utiliser
-            get_docker_cmd() {
-              if docker ps &> /dev/null 2>&1; then
-                echo "docker"
-              else
-                echo "sudo docker"
-              fi
-            }
-            
-            DOCKER_CMD=$(get_docker_cmd)
-            
-            echo "📊 État des conteneurs:"
-            $DOCKER_CMD ps --filter "name=blogpress" --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
-            
-            echo ""
-            echo "🏥 Health checks:"
-            
-            # Health check MongoDB
-            if $DOCKER_CMD exec blogpress-mongodb mongosh --eval "db.adminCommand('ping')" --quiet > /dev/null 2>&1; then
-              echo "✅ MongoDB: OK"
-            else
-              echo "⚠️ MongoDB: En cours de démarrage"
-            fi
-            
-            # Health check API
-            if curl -f http://localhost:8090/actuator/health > /dev/null 2>&1; then
-              echo "✅ API: OK"
-            else
-              echo "⚠️ API: En cours de démarrage"
-            fi
-            
-            echo ""
-            echo "✅ Déploiement terminé!"
-          EOF
-
-  # ==========================================
-  # JOB 6: Create GitHub Release
-  # ==========================================
-  release:
-    name: 🚀 Create GitHub Release
-    runs-on: ubuntu-latest
-    needs: [tags, build]
-    if: |
-      github.event_name != 'pull_request' && 
-      github.ref == 'refs/heads/master' &&
-      needs.tags.outputs.tag_created == 'true' &&
-      needs.build.result == 'success'
-    
-    steps:
-      - name: 📥 Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: 🔍 Verify Tag Exists
-        run: |
-          TAG_NAME="${{ needs.tags.outputs.tag_name }}"
-          echo "🔍 Vérification que le tag $TAG_NAME existe sur le dépôt distant..."
-          
-          # Récupérer les tags du dépôt distant
-          git fetch --tags
-          
-          # Vérifier que le tag existe
-          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
-            echo "✅ Tag $TAG_NAME trouvé localement"
-          else
-            echo "⚠️ Tag $TAG_NAME non trouvé localement, tentative de récupération..."
-            git fetch origin tag "$TAG_NAME" || {
-              echo "❌ Erreur: Le tag $TAG_NAME n'existe pas sur le dépôt distant"
-              echo "ℹ️ Le tag doit être poussé avant de créer la release"
-              exit 1
-            }
-          fi
-          
-          # Afficher les informations du tag
-          echo "📋 Informations du tag:"
-          git show "$TAG_NAME" --no-patch --format="  SHA: %H%n  Auteur: %an%n  Date: %ad" || echo "  Impossible d'afficher les informations"
-      
-      - name: 📋 Generate Release Notes
-        id: release_notes
-        run: |
-          TAG_NAME="${{ needs.tags.outputs.tag_name }}"
-          VERSION="${{ needs.tags.outputs.semantic_version }}"
-          TAG_TYPE="${{ needs.tags.outputs.tag_type }}"
-          IS_RELEASE="${{ needs.tags.outputs.is_release }}"
-          
-          # Déterminer si c'est une release sémantique ou un tag de développement
-          if [ "$IS_RELEASE" = "true" ] && [ -n "$VERSION" ]; then
-            RELEASE_TYPE="🎉 Release Sémantique"
-            IS_PRERELEASE="false"
-            # Récupérer les commits depuis le dernier tag sémantique
-            LAST_TAG=$(git describe --tags --abbrev=0 --match "v[0-9]*" 2>/dev/null || echo "")
-            if [ -n "$LAST_TAG" ]; then
-              echo "📝 Génération des notes depuis le tag $LAST_TAG"
-              COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
-            else
-              echo "📝 Premier tag sémantique, récupération des 10 derniers commits"
-              COMMITS=$(git log -10 --pretty=format:"- %s (%h)" --no-merges)
-            fi
-          else
-            RELEASE_TYPE="🔧 Release de Développement"
-            IS_PRERELEASE="true"
-            # Pour les tags de développement, récupérer les 10 derniers commits
-            echo "📝 Tag de développement, récupération des 10 derniers commits"
-            COMMITS=$(git log -10 --pretty=format:"- %s (%h)" --no-merges)
-          fi
-          
-          # Créer le body de la release
-          {
-            if [ "$IS_RELEASE" = "true" ] && [ -n "$VERSION" ]; then
-              echo "## $RELEASE_TYPE"
-              echo ""
-              echo "**Version:** $VERSION"
-              echo "**Tag:** $TAG_NAME"
-              echo "**Type:** $TAG_TYPE"
-              echo ""
-              echo "### 📦 Images Docker"
-              echo "Les images Docker sont disponibles sur Docker Hub :"
-              echo ""
-              echo "**API:**"
-              echo "\`\`\`"
-              echo "docker pull ${{ env.DOCKER_IMAGE }}:$TAG_NAME"
-              echo "docker pull ${{ env.DOCKER_IMAGE }}:latest"
-              echo "\`\`\`"
-            else
-              echo "## $RELEASE_TYPE"
-              echo ""
-              echo "**Tag:** $TAG_NAME"
-              echo "**Type:** $TAG_TYPE"
-              echo ""
-              echo "⚠️ **Note:** Ceci est une release de développement. Pour une release de production, mettez à jour la version dans \`build.gradle.kts\`."
-              echo ""
-              echo "### 📦 Images Docker"
-              echo "Les images Docker sont disponibles sur Docker Hub :"
-              echo ""
-              echo "**API:**"
-              echo "\`\`\`"
-              echo "docker pull ${{ env.DOCKER_IMAGE }}:$TAG_NAME"
-              echo "\`\`\`"
-            fi
-            echo ""
-            echo "### 📝 Changements"
-            echo "$COMMITS"
-            echo ""
-            echo "### 🔗 Liens"
-            echo "- **Docker Hub API:** https://hub.docker.com/r/${{ env.DOCKER_IMAGE }}"
-            echo "- **Commit:** [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})"
-            echo ""
-            echo "---"
-            echo "*Généré automatiquement par GitHub Actions*"
-          } > release_notes.md
-          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
-          echo "✅ Notes de release générées (Prerelease: $IS_PRERELEASE)"
-          
-          # Afficher un aperçu
-          echo "📄 Aperçu des notes de release:"
-          head -30 release_notes.md
-      
-      - name: 🚀 Create GitHub Release
-        uses: softprops/action-gh-release@v2
+
+      - name: TruffleHog (PR diff scan)
+        if: github.event_name == 'pull_request'
+        uses: trufflesecurity/trufflehog@main
         with:
-          tag_name: ${{ needs.tags.outputs.tag_name }}
-          name: Release ${{ needs.tags.outputs.tag_name }}
-          body_path: release_notes.md
-          draft: false
-          prerelease: ${{ steps.release_notes.outputs.is_prerelease }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          generate_release_notes: false
+          path: ./
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+          extra_args: --only-verified
+
+      - name: Install TruffleHog (push / tag / dispatch)
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver="${TRUFFLEHOG_VERSION}"
+          asset="trufflehog_${ver}_linux_amd64.tar.gz"
+          url="https://github.com/trufflesecurity/trufflehog/releases/download/v${ver}/${asset}"
+          tmp="$(mktemp -d)"
+          curl -sSfL "$url" -o "${tmp}/${asset}"
+          tar -xzf "${tmp}/${asset}" -C "${tmp}"
+          sudo install -m 0755 "${tmp}/trufflehog" /usr/local/bin/trufflehog
+          rm -rf "${tmp}"
+          trufflehog --version
+
+      - name: TruffleHog (filesystem scan)
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          trufflehog filesystem . \
+            --only-verified \
+            --fail \
+            --no-update \
+            --exclude-paths=.github/trufflehog-exclude-paths.txt
+
+  build:
+    name: Build Spring Boot JAR
+    runs-on: ubuntu-latest
+    needs:
+      - tag
+      - compile
+      - unit-tests
+      - secret-scan
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: bootJar
+        run: ./gradlew bootJar --no-daemon -x test
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar-${{ needs.tag.outputs.short_sha }}
+          path: build/libs/*.jar
+          retention-days: 7
+          if-no-files-found: error
+
+  docker-build:
+    name: Build, scan and SBOM Docker image (API)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [tag, build]
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Pre-pull BuildKit image (retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMG=moby/buildkit:buildx-stable-1
+          for attempt in 1 2 3 4 5; do
+            echo "Tentative ${attempt}/5 : docker pull ${IMG}"
+            if docker pull "${IMG}"; then
+              echo "BuildKit image OK"
+              exit 0
+            fi
+            echo "registry-1.docker.io injoignable, attente $((attempt * 20))s…"
+            sleep $((attempt * 20))
+          done
+          echo "::error::Docker Hub inaccessible après 5 tentatives."
+          exit 1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+          driver-opts: image=moby/buildkit:buildx-stable-1
+
+      - name: Build API image (load locally)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: setup-api/Dockerfile
+          push: false
+          load: true
+          tags: |
+            ${{ env.IMAGE_API }}:${{ needs.tag.outputs.docker_tag }}
+            ${{ env.IMAGE_API }}:${{ needs.tag.outputs.short_sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Trivy scan API (report only)
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_API }}:${{ needs.tag.outputs.docker_tag }}
+          format: table
+          exit-code: "0"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          vuln-type: os,library
+
+      - name: Trivy SARIF API
+        if: vars.ENABLE_CODE_SCANNING == 'true'
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_API }}:${{ needs.tag.outputs.docker_tag }}
+          format: sarif
+          output: trivy-api.sarif
+          exit-code: "0"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          vuln-type: os,library
+
+      - name: Upload Trivy SARIF (API)
+        if: vars.ENABLE_CODE_SCANNING == 'true'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-api.sarif
+          category: trivy-api
+
+      - name: Generate SBOM API (Syft)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE_API }}:${{ needs.tag.outputs.docker_tag }}
+          format: spdx-json
+          output-file: sbom-api.spdx.json
+          upload-artifact: false
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ needs.tag.outputs.short_sha }}
+          path: sbom-api.spdx.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Image build summary
+        shell: bash
+        run: |
+          {
+            echo "### Docker image (built locally)"
+            echo "- \`${{ env.IMAGE_API }}:${{ needs.tag.outputs.docker_tag }}\`"
+            echo "- \`${{ env.IMAGE_API }}:${{ needs.tag.outputs.short_sha }}\`"
+            echo "- MongoDB runtime: \`${{ env.MONGO_IMAGE }}\` (image officielle, pas de build)"
+            echo "- SBOM: artifact \`sbom-${{ needs.tag.outputs.short_sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  docker-push:
+    name: Push API image to Docker Hub and GHCR
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [tag, docker-build]
+    # develop (push) : stop ici — sinon suite complète (main/master/PR/tags/dispatch)
+    if: github.ref != 'refs/heads/develop'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest_api: ${{ steps.push-api.outputs.digest }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Pre-pull BuildKit image (retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMG=moby/buildkit:buildx-stable-1
+          for attempt in 1 2 3 4 5; do
+            echo "Tentative ${attempt}/5 : docker pull ${IMG}"
+            if docker pull "${IMG}"; then
+              exit 0
+            fi
+            sleep $((attempt * 20))
+          done
+          exit 1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+          driver-opts: image=moby/buildkit:buildx-stable-1
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute API image tags
+        id: meta-api
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_API }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_API }}
+          tags: |
+            type=raw,value=${{ needs.tag.outputs.docker_tag }}
+            type=raw,value=${{ needs.tag.outputs.short_sha }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+
+      - name: Build and push API image
+        id: push-api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: setup-api/Dockerfile
+          push: true
+          tags: ${{ steps.meta-api.outputs.tags }}
+          labels: ${{ steps.meta-api.outputs.labels }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+          provenance: true
+          sbom: true
+
+      - name: Push summary
+        shell: bash
+        run: |
+          {
+            echo "### Image pushed (API)"
+            echo "- Digest: \`${{ steps.push-api.outputs.digest }}\`"
+            echo "- Tags:"
+            while IFS= read -r tag; do
+              [ -n "${tag}" ] && echo "  - \`${tag}\`"
+            done <<< "${{ steps.meta-api.outputs.tags }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  docker-sign:
+    name: Sign API image with cosign (keyless OIDC)
+    runs-on: ubuntu-latest
+    needs: [tag, docker-push]
+    if: github.ref != 'refs/heads/develop'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign API image
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+          IMAGE_REF: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_API }}@${{ needs.docker-push.outputs.digest_api }}
+        run: cosign sign --yes "${IMAGE_REF}"
+
+      - name: Sign summary
+        shell: bash
+        run: |
+          {
+            echo "### Cosign signature"
+            echo "- API: \`${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_API }}@${{ needs.docker-push.outputs.digest_api }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy to VPS (blogpress)
+    runs-on: ubuntu-latest
+    needs: [tag, docker-push, docker-sign]
+    if: github.ref != 'refs/heads/develop'
+    environment:
+      name: production
+      url: https://api.blogpress-app.com
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Validate required secrets
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          missing=()
+          [ -z "${VPS_HOST}" ] && missing+=("VPS_HOST")
+          [ -z "${VPS_USERNAME}" ] && missing+=("VPS_USERNAME")
+          [ -z "${VPS_SSH_KEY}" ] && missing+=("VPS_SSH_KEY")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Secrets VPS manquants : ${missing[*]}"
+            exit 1
+          fi
+          echo "Secrets VPS présents"
+
+      - name: Copy compose.prod.yaml to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: setup-api/compose.prod.yaml
+          target: ${{ secrets.VPS_DEPLOY_DIR || '~/blogpress/setup-api' }}/
+          strip_components: 1
+          overwrite: true
+
+      - name: Deploy via SSH (Mongo healthy → pull API → up)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: BLOGPRESS_API_IMAGE,DOCKERHUB_USERNAME,DOCKERHUB_PASSWORD,DEPLOY_DIR
+          script_stop: true
+          command_timeout: 30m
+          script: |
+            set -eu
+
+            DEPLOY_DIR="${DEPLOY_DIR:-$HOME/blogpress/setup-api}"
+            mkdir -p "$DEPLOY_DIR"
+            cd "$DEPLOY_DIR"
+
+            if [ ! -f "$DEPLOY_DIR/.env" ]; then
+              echo "Fichier $DEPLOY_DIR/.env absent."
+              echo "Copiez setup-api/.env.prod.example vers $DEPLOY_DIR/.env et renseignez les secrets."
+              exit 1
+            fi
+
+            if [ ! -f "$DEPLOY_DIR/compose.prod.yaml" ]; then
+              echo "compose.prod.yaml absent dans $DEPLOY_DIR"
+              exit 1
+            fi
+
+            if [ -n "${DOCKERHUB_USERNAME:-}" ] && [ -n "${DOCKERHUB_PASSWORD:-}" ]; then
+              echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+            fi
+
+            # Met à jour l'image API dans .env pour ce déploiement (sans écraser le reste)
+            if grep -q '^BLOGPRESS_API_IMAGE=' .env; then
+              sed -i "s|^BLOGPRESS_API_IMAGE=.*|BLOGPRESS_API_IMAGE=${BLOGPRESS_API_IMAGE}|" .env
+            else
+              echo "BLOGPRESS_API_IMAGE=${BLOGPRESS_API_IMAGE}" >> .env
+            fi
+
+            export BLOGPRESS_API_IMAGE
+            echo "==> Pull MongoDB officiel (si besoin) + API : $BLOGPRESS_API_IMAGE"
+            docker compose -f compose.prod.yaml pull
+
+            echo "==> Up (mongodb healthy → api)"
+            docker compose -f compose.prod.yaml up -d --remove-orphans --force-recreate
+            docker image prune -f
+            docker compose -f compose.prod.yaml ps
+
+            docker logout || true
+        env:
+          BLOGPRESS_API_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_API }}:${{ needs.tag.outputs.docker_tag }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+          DEPLOY_DIR: ${{ secrets.VPS_DEPLOY_DIR }}
+
+      - name: Deploy summary
+        shell: bash
+        run: |
+          {
+            echo "### Déploiement blogpress"
+            echo "- API: \`${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_API }}:${{ needs.tag.outputs.docker_tag }}\`"
+            echo "- Digest: \`${{ needs.docker-push.outputs.digest_api }}\`"
+            echo "- Répertoire VPS: \`${{ secrets.VPS_DEPLOY_DIR || '~/blogpress/setup-api' }}\`"
+            echo "- API publique: https://api.blogpress-app.com"
+            echo "- Port local nginx: \`127.0.0.1:8090\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  smoke-test:
+    name: Smoke test post-deploy
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: github.ref != 'refs/heads/develop'
+    permissions:
+      contents: read
+    steps:
+      - name: Healthcheck SSH (mongodb + api)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: DEPLOY_DIR,API_PORT
+          script: |
+            set -eu
+            DEPLOY_DIR="${DEPLOY_DIR:-$HOME/blogpress/setup-api}"
+            API_PORT="${API_PORT:-8090}"
+            cd "$DEPLOY_DIR"
+
+            for name in blogpress-mongodb blogpress-api; do
+              RUNNING="$(docker ps --filter "name=^${name}$" --format '{{.Names}}')"
+              if [ "$RUNNING" != "$name" ]; then
+                echo "Conteneur ${name} absent ou arrêté"
+                docker ps -a
+                exit 1
+              fi
+            done
+
+            DB_HEALTH="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' blogpress-mongodb 2>/dev/null || echo none)"
+            echo "mongodb health: $DB_HEALTH"
+            if [ "$DB_HEALTH" != "healthy" ] && [ "$DB_HEALTH" != "none" ]; then
+              echo "MongoDB pas healthy"
+              docker logs --tail 80 blogpress-mongodb || true
+              exit 1
+            fi
+
+            i=1
+            while [ "$i" -le 24 ]; do
+              HTTP_CODE="$(curl -s -o /tmp/blogpress-health.json -w '%{http_code}' --max-time 5 \
+                "http://127.0.0.1:${API_PORT}/actuator/health/liveness" || echo 000)"
+              if [ "$HTTP_CODE" = "200" ]; then
+                echo "API OK (/actuator/health/liveness HTTP $HTTP_CODE)"
+                cat /tmp/blogpress-health.json || true
+                break
+              fi
+              echo "API pas prête ($i/24) HTTP=$HTTP_CODE..."
+              i=$((i+1))
+              sleep 5
+            done
+
+            if [ "$i" -gt 24 ]; then
+              echo "API ne répond pas — logs :"
+              docker logs --tail 200 blogpress-api || true
+              exit 1
+            fi
+
+            echo "Smoke test OK"
+        env:
+          DEPLOY_DIR: ${{ secrets.VPS_DEPLOY_DIR }}
+          API_PORT: ${{ vars.API_PORT || '8090' }}
+
+      - name: Public HTTPS check (API)
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://api.blogpress-app.com/actuator/health/liveness"
+          for i in $(seq 1 6); do
+            HTTP_CODE="$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 15 "$URL" || echo '000')"
+            echo "Tentative $i : HTTP $HTTP_CODE"
+            case "$HTTP_CODE" in
+              2*) echo "API publique OK"; exit 0 ;;
+            esac
+            sleep 10
+          done
+          echo "::warning::https://api.blogpress-app.com/actuator/health/liveness non joignable depuis le runner (DNS / Cloudflare / nginx)."
+
+      - name: Smoke test summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Smoke test blogpress"
+            echo "- Conteneurs \`blogpress-mongodb\`, \`blogpress-api\`"
+            echo "- Local: http://127.0.0.1:${{ vars.API_PORT || '8090' }}/actuator/health/liveness"
+            echo "- Public: https://api.blogpress-app.com/actuator/health/liveness"
+          } >> "$GITHUB_STEP_SUMMARY"

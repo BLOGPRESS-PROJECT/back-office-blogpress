@@ -1,27 +1,23 @@
 # ==========================================
-# BLOGPRESS - Docker Compose
+# Blogpress API — Production Compose
 # ==========================================
-# Local (DB only) :
-#   docker compose up -d
+# Usage VPS :
+#   docker compose -f compose.prod.yaml pull
+#   docker compose -f compose.prod.yaml up -d
 #
-# Production (API + DB) :
-#   docker compose --profile prod up -d
+# Variables : fichier .env (voir .env.prod.example)
+# Image API  : BLOGPRESS_API_IMAGE (injectée par la CI)
 # ==========================================
 
 services:
-  # ==========================================
-  # MONGODB (toujours démarré : local + prod)
-  # ==========================================
   mongodb:
     image: mongo:7.0
     container_name: blogpress-mongodb
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-root}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-qwerty87}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
       MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-blogpress}
-    ports:
-      - "${MONGO_PORT:-27017}:27017"
     volumes:
       - mongodb-data:/data/db
       - mongodb-config:/data/configdb
@@ -35,16 +31,13 @@ services:
       start_period: 20s
     command: ["--auth"]
 
-  # ==========================================
-  # API (uniquement avec --profile prod)
-  # ==========================================
   api:
-    profiles: ["prod"]
-    image: ${DOCKERHUB_USERNAME:-azerty78}/blogpress-api:latest
+    image: ${BLOGPRESS_API_IMAGE:-azerty78/blogpress-api:latest}
     container_name: blogpress-api
     restart: unless-stopped
     ports:
-      - "${API_PORT:-8090}:8090"
+      # Bind localhost pour reverse-proxy nginx hôte
+      - "127.0.0.1:${API_PORT:-8090}:8090"
     env_file:
       - .env
     environment:
@@ -52,26 +45,26 @@ services:
       APP_BASE_URL: ${APP_BASE_URL}
       APP_FRONTEND_URL: ${APP_FRONTEND_URL}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
-      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-qwerty87}@mongodb:27017/${MONGO_DATABASE:-blogpress}?authSource=admin
+      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_DATABASE:-blogpress}?authSource=admin
       MONGO_AUTO_INDEX: ${MONGO_AUTO_INDEX:-true}
       JWT_SECRET: ${JWT_SECRET}
-      JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION}
-      JWT_REFRESH_TOKEN_EXPIRATION: ${JWT_REFRESH_TOKEN_EXPIRATION}
+      JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION:-3600000}
+      JWT_REFRESH_TOKEN_EXPIRATION: ${JWT_REFRESH_TOKEN_EXPIRATION:-604800000}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       ADMIN_USERNAME: ${ADMIN_USERNAME}
       ADMIN_FIRSTNAME: ${ADMIN_FIRSTNAME}
       ADMIN_LASTNAME: ${ADMIN_LASTNAME}
       FILE_STORAGE_BASE_PATH: /app/uploads
-      FILE_STORAGE_MAX_FILE_SIZE: ${FILE_STORAGE_MAX_FILE_SIZE}
-      FILE_STORAGE_ALLOWED_TYPES: ${FILE_STORAGE_ALLOWED_TYPES}
-      MULTIPART_MAX_FILE_SIZE: ${MULTIPART_MAX_FILE_SIZE}
-      MULTIPART_MAX_REQUEST_SIZE: ${MULTIPART_MAX_REQUEST_SIZE}
-      LOG_LEVEL_ROOT: ${LOG_LEVEL_ROOT}
-      LOG_LEVEL_APP: ${LOG_LEVEL_APP}
-      LOG_LEVEL_MONGO: ${LOG_LEVEL_MONGO}
-      DEVTOOLS_ENABLED: ${DEVTOOLS_ENABLED:-false}
-      JAVA_OPTS: ${JAVA_OPTS}
+      FILE_STORAGE_MAX_FILE_SIZE: ${FILE_STORAGE_MAX_FILE_SIZE:-5242880}
+      FILE_STORAGE_ALLOWED_TYPES: ${FILE_STORAGE_ALLOWED_TYPES:-image/jpeg,image/png,image/gif,image/webp}
+      MULTIPART_MAX_FILE_SIZE: ${MULTIPART_MAX_FILE_SIZE:-5MB}
+      MULTIPART_MAX_REQUEST_SIZE: ${MULTIPART_MAX_REQUEST_SIZE:-10MB}
+      LOG_LEVEL_ROOT: ${LOG_LEVEL_ROOT:-WARN}
+      LOG_LEVEL_APP: ${LOG_LEVEL_APP:-INFO}
+      LOG_LEVEL_MONGO: ${LOG_LEVEL_MONGO:-WARN}
+      DEVTOOLS_ENABLED: "false"
+      JAVA_OPTS: ${JAVA_OPTS:--Xms512m -Xmx1024m -XX:+UseG1GC}
     volumes:
       - api-uploads:/app/uploads
       - api-logs:/app/logs

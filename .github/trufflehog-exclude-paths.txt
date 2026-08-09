@@ -1,0 +1,6 @@
+# Chemins exclus du scan TruffleHog (filesystem)
+build/**
+.gradle/**
+.idea/**
+**/*.jar
+**/uploads/**

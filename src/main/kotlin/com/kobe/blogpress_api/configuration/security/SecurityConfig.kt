@@ -110,7 +110,7 @@ class SecurityConfig(
                     .pathMatchers(HttpMethod.DELETE, "/api/articles/*/cover-image").authenticated()
 
                     // Documentation et health
-                    .pathMatchers("/actuator/health", "/health").permitAll()
+                    .pathMatchers("/actuator/health", "/actuator/health/**", "/health").permitAll()
 
                     // ===== ROUTES ADMIN =====
                     .pathMatchers("/api/admin/**").hasRole("ADMIN")
