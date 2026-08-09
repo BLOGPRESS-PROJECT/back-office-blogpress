@@ -51,7 +51,7 @@ jobs:
     
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -278,16 +278,16 @@ jobs:
 
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: ☕ Setup JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
 
       - name: 💾 Cache Gradle
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.gradle/caches
@@ -313,7 +313,7 @@ jobs:
     steps:
       # Étape 1: Checkout du code
       - name: 📥 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       
       # Étape 2: Nettoyer et recréer les contextes Docker correctement
       - name: 🧹 Setup Docker Properly
@@ -355,7 +355,7 @@ jobs:
       
       # Étape 3: Login à DockerHub 
       - name: 🔐 Login to DockerHub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -365,15 +365,15 @@ jobs:
         run: |
           echo "✅ Login DockerHub réussi"
           
-          # Test: essayer de pull gradle:8.5-jdk21 pour vérifier l'authentification
-          echo "Test: Pull de gradle:8.5-jdk21..."
-          docker pull gradle:8.5-jdk21 || {
-            echo "❌ Erreur: Impossible de pull gradle:8.5-jdk21"
+          # Test: essayer de pull gradle:8.14.3-jdk21 pour vérifier l'authentification
+          echo "Test: Pull de gradle:8.14.3-jdk21..."
+          docker pull gradle:8.14.3-jdk21 || {
+            echo "❌ Erreur: Impossible de pull gradle:8.14.3-jdk21"
             echo "Vérification du config.json..."
             cat ~/.docker/config.json || echo "⚠️ Pas de config.json"
             exit 1
           }
-          echo "✅ Pull de gradle:8.5-jdk21 réussi"
+          echo "✅ Pull de gradle:8.14.3-jdk21 réussi"
       
       # Étape 4: Extract metadata (tags, labels) avec intégration des tags Git
       - name: 📋 Extract metadata
@@ -478,7 +478,7 @@ jobs:
     steps:
       # Étape 1: Checkout
       - name: 📥 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       
       # Étape 2: Nettoyer et recréer les contextes Docker correctement
       - name: 🧹 Setup Docker Properly
@@ -520,7 +520,7 @@ jobs:
       
       # Étape 3: Login à DockerHub
       - name: 🔐 Login to DockerHub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -600,11 +600,11 @@ jobs:
     steps:
       # Étape 1: Checkout du code
       - name: 📥 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       
       # Étape 2: Setup SSH
       - name: 🔐 Setup SSH
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@v0.9.1
         with:
           ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
       
@@ -1055,7 +1055,7 @@ jobs:
     
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -1165,7 +1165,7 @@ jobs:
           head -30 release_notes.md
       
       - name: 🚀 Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.tags.outputs.tag_name }}
           name: Release ${{ needs.tags.outputs.tag_name }}

@@ -1,7 +1,7 @@
 plugins {
-	kotlin("jvm") version "1.9.25"
-	kotlin("plugin.spring") version "1.9.25"
-	id("org.springframework.boot") version "3.5.6"
+	kotlin("jvm") version "2.2.21"
+	kotlin("plugin.spring") version "2.2.21"
+	id("org.springframework.boot") version "3.5.16"
 	id("io.spring.dependency-management") version "1.1.7"
 }
 
@@ -40,20 +40,19 @@ dependencies {
 	// ==========================================
 	// JWT (JSON Web Token)
 	// ==========================================
-	implementation("io.jsonwebtoken:jjwt-api:0.12.6")
-	runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
-	runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
+	implementation("io.jsonwebtoken:jjwt-api:0.13.0")
+	runtimeOnly("io.jsonwebtoken:jjwt-impl:0.13.0")
+	runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.13.0")
 
 	// ==========================================
 	// SWAGGER/OPENAPI DOCUMENTATION
 	// ==========================================
-	implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:2.6.0")
+	implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:2.8.17")
 
 	// ==========================================
 	// DEVELOPMENT TOOLS
 	// ==========================================
 	developmentOnly("org.springframework.boot:spring-boot-devtools")
-	developmentOnly("org.springframework.boot:spring-boot-docker-compose")
 
 	// ==========================================
 	// ANNOTATION PROCESSOR
