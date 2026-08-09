@@ -1,12 +1,14 @@
 # ==========================================
 # Blogpress API — Production Compose
 # ==========================================
-# Usage VPS :
+# Usage VPS (~/blogpress/setup-api) :
 #   docker compose -f compose.prod.yaml pull
 #   docker compose -f compose.prod.yaml up -d
 #
 # Variables : fichier .env (voir .env.prod.example)
 # Image API  : BLOGPRESS_API_IMAGE (injectée par la CI)
+# Port hôte  : 127.0.0.1:4006 → container:8090
+# Network    : blogpress-network
 # ==========================================
 
 services:
@@ -37,11 +39,11 @@ services:
     restart: unless-stopped
     ports:
       # Bind localhost pour reverse-proxy nginx hôte
-      - "127.0.0.1:${API_PORT:-8090}:8090"
+      - "127.0.0.1:${API_PORT:-4006}:8090"
     env_file:
       - .env
     environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILE:-prod}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILE:-docker}
       APP_BASE_URL: ${APP_BASE_URL}
       APP_FRONTEND_URL: ${APP_FRONTEND_URL}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
@@ -56,15 +58,15 @@ services:
       ADMIN_FIRSTNAME: ${ADMIN_FIRSTNAME}
       ADMIN_LASTNAME: ${ADMIN_LASTNAME}
       FILE_STORAGE_BASE_PATH: /app/uploads
-      FILE_STORAGE_MAX_FILE_SIZE: ${FILE_STORAGE_MAX_FILE_SIZE:-5242880}
-      FILE_STORAGE_ALLOWED_TYPES: ${FILE_STORAGE_ALLOWED_TYPES:-image/jpeg,image/png,image/gif,image/webp}
-      MULTIPART_MAX_FILE_SIZE: ${MULTIPART_MAX_FILE_SIZE:-5MB}
+      FILE_STORAGE_MAX_FILE_SIZE: ${FILE_STORAGE_MAX_FILE_SIZE:-10485760}
+      FILE_STORAGE_ALLOWED_TYPES: ${FILE_STORAGE_ALLOWED_TYPES:-image/jpeg,image/png,image/webp}
+      MULTIPART_MAX_FILE_SIZE: ${MULTIPART_MAX_FILE_SIZE:-10MB}
       MULTIPART_MAX_REQUEST_SIZE: ${MULTIPART_MAX_REQUEST_SIZE:-10MB}
-      LOG_LEVEL_ROOT: ${LOG_LEVEL_ROOT:-WARN}
-      LOG_LEVEL_APP: ${LOG_LEVEL_APP:-INFO}
+      LOG_LEVEL_ROOT: ${LOG_LEVEL_ROOT:-INFO}
+      LOG_LEVEL_APP: ${LOG_LEVEL_APP:-DEBUG}
       LOG_LEVEL_MONGO: ${LOG_LEVEL_MONGO:-WARN}
       DEVTOOLS_ENABLED: "false"
-      JAVA_OPTS: ${JAVA_OPTS:--Xms512m -Xmx1024m -XX:+UseG1GC}
+      JAVA_OPTS: ${JAVA_OPTS:--Xms256m -Xmx512m -XX:+UseG1GC}
     volumes:
       - api-uploads:/app/uploads
       - api-logs:/app/logs

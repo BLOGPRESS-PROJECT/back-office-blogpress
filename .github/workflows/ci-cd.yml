@@ -11,7 +11,7 @@
 # VPS : ~/blogpress/setup-api/
 #   - .env (manuel, depuis setup-api/.env.prod.example)
 #   - compose.prod.yaml (scp CI)
-# nginx API : api.blogpress-app.com → 127.0.0.1:8090
+# nginx API : api.blogpress-app.com → 127.0.0.1:4006
 # =============================================================================
 
 name: CI/CD
@@ -476,6 +476,23 @@ jobs:
           fi
           echo "Secrets VPS présents"
 
+      - name: Ensure deploy directory on VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: DEPLOY_DIR
+          script_stop: true
+          script: |
+            set -eu
+            DEPLOY_DIR="${DEPLOY_DIR:-$HOME/blogpress/setup-api}"
+            mkdir -p "$DEPLOY_DIR"
+            echo "Deploy dir prêt: $DEPLOY_DIR"
+        env:
+          DEPLOY_DIR: ${{ secrets.VPS_BACKOFFICE_DEPLOY_DIR }}
+
       - name: Copy compose.prod.yaml to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -484,7 +501,7 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           source: setup-api/compose.prod.yaml
-          target: ${{ secrets.VPS_DEPLOY_DIR || '~/blogpress/setup-api' }}/
+          target: ${{ secrets.VPS_BACKOFFICE_DEPLOY_DIR || '~/blogpress/setup-api' }}/
           strip_components: 1
           overwrite: true
 
@@ -541,7 +558,7 @@ jobs:
           BLOGPRESS_API_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_API }}:${{ needs.tag.outputs.docker_tag }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
-          DEPLOY_DIR: ${{ secrets.VPS_DEPLOY_DIR }}
+          DEPLOY_DIR: ${{ secrets.VPS_BACKOFFICE_DEPLOY_DIR }}
 
       - name: Deploy summary
         shell: bash
@@ -550,9 +567,9 @@ jobs:
             echo "### Déploiement blogpress"
             echo "- API: \`${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_API }}:${{ needs.tag.outputs.docker_tag }}\`"
             echo "- Digest: \`${{ needs.docker-push.outputs.digest_api }}\`"
-            echo "- Répertoire VPS: \`${{ secrets.VPS_DEPLOY_DIR || '~/blogpress/setup-api' }}\`"
+            echo "- Répertoire VPS: \`${{ secrets.VPS_BACKOFFICE_DEPLOY_DIR || '~/blogpress/setup-api' }}\`"
             echo "- API publique: https://api.blogpress-app.com"
-            echo "- Port local nginx: \`127.0.0.1:8090\`"
+            echo "- Port local nginx: \`127.0.0.1:4006\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
   smoke-test:
@@ -574,7 +591,7 @@ jobs:
           script: |
             set -eu
             DEPLOY_DIR="${DEPLOY_DIR:-$HOME/blogpress/setup-api}"
-            API_PORT="${API_PORT:-8090}"
+            API_PORT="${API_PORT:-4006}"
             cd "$DEPLOY_DIR"
 
             for name in blogpress-mongodb blogpress-api; do
@@ -616,8 +633,8 @@ jobs:
 
             echo "Smoke test OK"
         env:
-          DEPLOY_DIR: ${{ secrets.VPS_DEPLOY_DIR }}
-          API_PORT: ${{ vars.API_PORT || '8090' }}
+          DEPLOY_DIR: ${{ secrets.VPS_BACKOFFICE_DEPLOY_DIR }}
+          API_PORT: ${{ vars.API_PORT || '4006' }}
 
       - name: Public HTTPS check (API)
         shell: bash
@@ -641,6 +658,6 @@ jobs:
           {
             echo "### Smoke test blogpress"
             echo "- Conteneurs \`blogpress-mongodb\`, \`blogpress-api\`"
-            echo "- Local: http://127.0.0.1:${{ vars.API_PORT || '8090' }}/actuator/health/liveness"
+            echo "- Local: http://127.0.0.1:${{ vars.API_PORT || '4006' }}/actuator/health/liveness"
             echo "- Public: https://api.blogpress-app.com/actuator/health/liveness"
           } >> "$GITHUB_STEP_SUMMARY"
