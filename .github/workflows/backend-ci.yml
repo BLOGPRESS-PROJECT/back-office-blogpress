@@ -1,4 +1,4 @@
-name: Deploy Blogpress App & Reverse Proxy
+name: Deploy Blogpress App
 
 # ==========================================
 # DÉCLENCHEMENT
@@ -30,9 +30,6 @@ env:
   DOCKER_IMAGE: azerty78/blogpress-api
   DOCKERFILE_PATH: setup-api/Dockerfile
   DOCKER_CONTEXT: .
-  NGINX_IMAGE: azerty78/blogpress-nginx
-  NGINX_DOCKERFILE_PATH: setup-proxy/Dockerfile
-  NGINX_DOCKER_CONTEXT: setup-proxy
 
 # ==========================================
 # JOBS
@@ -470,235 +467,7 @@ jobs:
           docker images | grep "${{ env.DOCKER_IMAGE }}"
   
   # ==========================================
-  # JOB 4: Build & Push Nginx Image
-  # ==========================================
-  build-nginx:
-    needs: [tags, test]
-    name: 🔨 Build & Push Nginx Image
-    runs-on: ubuntu-latest
-    
-    steps:
-      # Étape 1: Checkout du code
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-      
-      # Étape 2: Nettoyer et recréer les contextes Docker correctement
-      - name: 🧹 Setup Docker Properly
-        run: |
-          # Supprimer buildx et contextes corrompus
-          rm -rf ~/.docker/buildx 2>/dev/null || true
-          rm -rf ~/.docker/contexts 2>/dev/null || true
-          
-          # Recréer la structure de contextes correctement
-          mkdir -p ~/.docker/contexts/meta
-          
-          # Créer le contexte par défaut "." (nécessaire pour docker run)
-          DEFAULT_CONTEXT_DIR=~/.docker/contexts/meta/cdb4ee2aea69cc6a83331bbe96dc2caa9a299d21329efb0336fc02a82e1839a8
-          mkdir -p "$DEFAULT_CONTEXT_DIR"
-          
-          # Créer le fichier meta.json pour le contexte par défaut
-          cat > "$DEFAULT_CONTEXT_DIR/meta.json" <<'EOF'
-          {
-            "Name": ".",
-            "Metadata": {
-              "Description": "Default context"
-            },
-            "Endpoints": {
-              "docker": {
-                "Host": "unix:///var/run/docker.sock",
-                "SkipTLSVerify": false
-              }
-            }
-          }
-          EOF
-          
-          # Vérifier que le fichier a été créé
-          if [ -f "$DEFAULT_CONTEXT_DIR/meta.json" ]; then
-            echo "✅ Contexte Docker par défaut créé avec succès"
-          else
-            echo "❌ Erreur: Impossible de créer le contexte par défaut"
-            exit 1
-          fi
-      
-      # Étape 3: Login à DockerHub 
-      - name: 🔐 Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
-      
-      # Étape 3b: Tester la syntaxe Nginx
-      - name: ✅ Test Nginx Configuration
-        run: |
-          echo "🔍 Test de la syntaxe Nginx..."
-          
-          # Pull l'image nginx:alpine pour le test
-          docker pull nginx:alpine || echo "Image déjà présente"
-          
-          # Créer un conteneur temporaire pour tester la config
-          # Utiliser le chemin absolu pour éviter les problèmes
-          ABS_PATH=$(pwd)
-          
-          # Créer des certificats SSL self-signed pour le test (nécessaires pour valider la syntaxe HTTPS)
-          echo "📝 Création de certificats SSL self-signed pour le test..."
-          mkdir -p /tmp/letsencrypt-test/live/api.blogpress-app.com
-          mkdir -p /tmp/letsencrypt-test/live/www.blogpress-app.com
-          mkdir -p /tmp/letsencrypt-test/live/blogpress-app.com
-          
-          # Fonction pour générer un certificat self-signed
-          generate_cert() {
-            local domain=$1
-            local cert_dir="/tmp/letsencrypt-test/live/$domain"
-            
-            # Essayer avec openssl local d'abord
-            if command -v openssl &> /dev/null; then
-              openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
-                -keyout "$cert_dir/privkey.pem" \
-                -out "$cert_dir/fullchain.pem" \
-                -subj "/CN=$domain" 2>/dev/null && return 0
-            fi
-            
-            # Sinon utiliser un conteneur Docker
-            docker run --rm \
-              -v /tmp/letsencrypt-test:/certs \
-              alpine/openssl:latest \
-              req -x509 -nodes -days 1 -newkey rsa:2048 \
-              -keyout "/certs/live/$domain/privkey.pem" \
-              -out "/certs/live/$domain/fullchain.pem" \
-              -subj "/CN=$domain" 2>/dev/null && return 0
-            
-            echo "⚠️  Impossible de générer le certificat pour $domain"
-            return 1
-          }
-          
-          # Générer les certificats pour chaque domaine
-          generate_cert "api.blogpress-app.com" || echo "⚠️  Échec pour api.blogpress-app.com"
-          generate_cert "www.blogpress-app.com" || echo "⚠️  Échec pour www.blogpress-app.com"
-          generate_cert "blogpress-app.com" || echo "⚠️  Échec pour blogpress-app.com"
-          
-          # Tester la syntaxe (les erreurs de résolution DNS sont normales dans l'environnement de test)
-          OUTPUT=$(docker run --rm \
-            -v "$ABS_PATH/setup-proxy/nginx.conf:/etc/nginx/nginx.conf:ro" \
-            -v "$ABS_PATH/setup-proxy/conf.d:/etc/nginx/conf.d:ro" \
-            -v "/tmp/letsencrypt-test:/etc/letsencrypt:ro" \
-            nginx:alpine \
-            nginx -t 2>&1) || true
-          
-          # Nettoyer les certificats factices
-          rm -rf /tmp/letsencrypt-test
-          
-          # Vérifier si c'est une erreur de syntaxe ou juste de résolution DNS
-          if echo "$OUTPUT" | grep -q "host not found in upstream"; then
-            echo "⚠️  Avertissement: Résolution DNS échouée (normal dans l'environnement de test)"
-            echo "✅ La syntaxe Nginx est valide (les hôtes seront résolus en production)"
-          elif echo "$OUTPUT" | grep -q "configuration file.*test is successful"; then
-            echo "✅ Configuration Nginx valide!"
-          elif echo "$OUTPUT" | grep -q "syntax is ok"; then
-            echo "✅ Configuration Nginx valide!"
-          elif echo "$OUTPUT" | grep -q "deprecated"; then
-            # Les avertissements de dépréciation ne sont pas bloquants
-            echo "⚠️  Avertissements de dépréciation détectés (non bloquants)"
-            if echo "$OUTPUT" | grep -q "syntax is ok\|test is successful"; then
-              echo "✅ Configuration Nginx valide!"
-            else
-              echo "❌ Erreur dans la configuration Nginx:"
-              echo "$OUTPUT"
-              exit 1
-            fi
-          else
-            echo "❌ Erreur dans la configuration Nginx:"
-            echo "$OUTPUT"
-            exit 1
-          fi
-      
-      # Étape 4: Extract metadata (tags, labels) avec intégration des tags Git
-      - name: 📋 Extract metadata
-        id: meta-nginx
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.NGINX_IMAGE }}
-          tags: |
-            # Tags Git (prioritaires si disponibles)
-            type=raw,value=${{ needs.tags.outputs.tag_name }},enable=${{ needs.tags.outputs.tag_created == 'true' && needs.tags.outputs.tag_name != '' }}
-            # Tags sémantiques basés sur la version
-            type=semver,pattern={{version}},enable=${{ needs.tags.outputs.is_release == 'true' }}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ needs.tags.outputs.is_release == 'true' }}
-            # Tags de branche (fallback)
-            type=ref,event=branch
-            # Tag SHA avec préfixe de branche (fallback)
-            type=sha,format=short,prefix=sha-
-            # Tag latest uniquement sur la branche principale
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
-            # Tags pour les PRs
-            type=ref,event=pr
-      
-      # Étape 5: Build Docker Image Nginx
-      - name: 🔨 Build Nginx Docker Image
-        env:
-          DOCKER_BUILDKIT: 0
-        run: |
-          # Préparer les tags
-          TAGS="${{ steps.meta-nginx.outputs.tags }}"
-          if [ -z "$TAGS" ]; then
-            # Fallback si metadata-action ne fonctionne pas
-            TAGS="${{ env.NGINX_IMAGE }}:latest ${{ env.NGINX_IMAGE }}:sha-${{ github.sha }}"
-          fi
-          
-          # Filtrer et valider les tags (supprimer les tags invalides)
-          VALID_TAGS=""
-          for tag in $TAGS; do
-            # Vérifier que le tag est valide :
-            # - Doit contenir un : (format image:tag)
-            # - La partie après : ne doit pas commencer par - ou être vide
-            # - Ne doit pas contenir de caractères invalides
-            if [[ "$tag" =~ ^[^:]+:[^:-] ]] && [[ ! "$tag" =~ ^[^:]+:- ]] && [[ -n "$tag" ]]; then
-              VALID_TAGS="$VALID_TAGS $tag"
-              echo "✅ Tag valide: $tag"
-            else
-              echo "⚠️ Tag invalide ignoré: $tag"
-            fi
-          done
-          
-          # Vérifier qu'il reste au moins un tag valide
-          if [ -z "$VALID_TAGS" ]; then
-            echo "❌ Aucun tag valide trouvé, utilisation du fallback"
-            VALID_TAGS="${{ env.NGINX_IMAGE }}:latest ${{ env.NGINX_IMAGE }}:sha-${{ github.sha }}"
-          fi
-          
-          # Construire les arguments --tag
-          TAG_ARGS=""
-          for tag in $VALID_TAGS; do
-            TAG_ARGS="$TAG_ARGS --tag $tag"
-          done
-          
-          echo "📦 Tags finaux à utiliser: $VALID_TAGS"
-          
-          # Construire l'image Nginx
-          docker build \
-            --pull \
-            --file ${{ env.NGINX_DOCKERFILE_PATH }} \
-            $TAG_ARGS \
-            ${{ env.NGINX_DOCKER_CONTEXT }}
-          
-          # Push l'image si ce n'est pas une PR
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            for tag in $VALID_TAGS; do
-              echo "Pushing $tag..."
-              docker push $tag
-            done
-          fi
-      
-      # Étape 6: Afficher les informations de l'image
-      - name: 📊 Nginx Image Info
-        if: success()
-        run: |
-          echo "✅ Image Nginx buildée avec succès!"
-          echo "📦 Image: ${{ env.NGINX_IMAGE }}"
-          echo "🏷️  Tags: ${{ steps.meta-nginx.outputs.tags }}"
-          docker images | grep "${{ env.NGINX_IMAGE }}"
-  
-  # ==========================================
-  # JOB 5: Test Docker Image (optionnel pour l'instant)
+  # JOB 4: Test Docker Image (optionnel pour l'instant)
   # ==========================================
   test-image:
     name: 🧪 Test Docker Image
@@ -820,12 +589,12 @@ jobs:
           docker rm test-container || true
 
   # ==========================================
-  # JOB 6: Deploy to VPS
+  # JOB 5: Deploy to VPS
   # ==========================================
   deploy:
     name: 🚀 Deploy to Production VPS
     runs-on: ubuntu-latest
-    needs: [build, build-nginx]
+    needs: [build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     
     steps:
@@ -1006,9 +775,7 @@ jobs:
             set -e
             
             # Créer la structure de base
-            mkdir -p ~/blogpress/{setup-db,setup-api,setup-proxy}
-            mkdir -p ~/blogpress/setup-db/init-scripts
-            mkdir -p ~/blogpress/setup-proxy/conf.d
+            mkdir -p ~/blogpress/setup-api
             
             echo "✅ Structure de dossiers créée"
           EOF
@@ -1031,19 +798,8 @@ jobs:
           # Ajouter le serveur aux known hosts
           ssh-keyscan -p ${{ secrets.VPS_PORT || 22 }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
           
-          # Copier les docker-compose.yaml
-          scp -F ~/.ssh/config setup-db/docker-compose.yaml vps-deploy:~/blogpress/setup-db/
+          # Copier le docker-compose (API + MongoDB)
           scp -F ~/.ssh/config setup-api/docker-compose.yaml vps-deploy:~/blogpress/setup-api/
-          scp -F ~/.ssh/config setup-proxy/docker-compose.yaml vps-deploy:~/blogpress/setup-proxy/
-          
-          # Copier les configurations Nginx
-          scp -F ~/.ssh/config setup-proxy/nginx.conf vps-deploy:~/blogpress/setup-proxy/
-          scp -F ~/.ssh/config -r setup-proxy/conf.d/* vps-deploy:~/blogpress/setup-proxy/conf.d/
-          
-          # Copier les init scripts MongoDB (si existants)
-          if [ -d "setup-db/init-scripts" ] && [ "$(ls -A setup-db/init-scripts)" ]; then
-            scp -F ~/.ssh/config -r setup-db/init-scripts/* vps-deploy:~/blogpress/setup-db/init-scripts/
-          fi
           
           echo "✅ Fichiers de configuration copiés"
       
@@ -1100,22 +856,19 @@ jobs:
             
             echo "📝 Mise à jour des fichiers .env en préservant les valeurs existantes..."
             
-            # Setup-DB
-            echo ""
-            echo "📦 Configuration setup-db/.env..."
-            set_env_if_empty ~/blogpress/setup-db/.env "MONGO_ROOT_USERNAME" "root"
-            set_env_if_empty ~/blogpress/setup-db/.env "MONGO_ROOT_PASSWORD" "qwerty87"
-            set_env_if_empty ~/blogpress/setup-db/.env "MONGO_DATABASE" "blogpress"
-            set_env_if_empty ~/blogpress/setup-db/.env "MONGO_PORT" "27017"
-            
-            # Setup-API (le plus important - avec valeurs par défaut pour créer l'admin)
+            # Setup-API (MongoDB + application)
             echo ""
             echo "📦 Configuration setup-api/.env..."
             set_env_if_empty ~/blogpress/setup-api/.env "SPRING_PROFILE" "prod"
+            set_env_if_empty ~/blogpress/setup-api/.env "API_PORT" "8090"
             set_env_if_empty ~/blogpress/setup-api/.env "APP_BASE_URL" "https://api.blogpress-app.com"
             set_env_if_empty ~/blogpress/setup-api/.env "APP_FRONTEND_URL" "https://www.blogpress-app.com"
             set_env_if_empty ~/blogpress/setup-api/.env "ALLOWED_ORIGINS" "https://www.blogpress-app.com,https://blogpress-app.com"
-            set_env_if_empty ~/blogpress/setup-api/.env "SPRING_DATA_MONGODB_URI" "mongodb://root:qwerty87@blogpress-mongodb:27017/blogpress?authSource=admin"
+            set_env_if_empty ~/blogpress/setup-api/.env "MONGO_ROOT_USERNAME" "root"
+            set_env_if_empty ~/blogpress/setup-api/.env "MONGO_ROOT_PASSWORD" "qwerty87"
+            set_env_if_empty ~/blogpress/setup-api/.env "MONGO_DATABASE" "blogpress"
+            set_env_if_empty ~/blogpress/setup-api/.env "MONGO_PORT" "27017"
+            set_env_if_empty ~/blogpress/setup-api/.env "SPRING_DATA_MONGODB_URI" "mongodb://root:qwerty87@mongodb:27017/blogpress?authSource=admin"
             set_env_if_empty ~/blogpress/setup-api/.env "MONGO_AUTO_INDEX" "true"
             set_env_if_empty ~/blogpress/setup-api/.env "JWT_SECRET" "VGhpcyBpcyBhIHZlcnkgc2VjdXJlIGFuZCBsb25nIHNlY3JldCBrZXkgZm9yIEJsb2dwcmVzcyBBUEkgMjAyNQ=="
             set_env_if_empty ~/blogpress/setup-api/.env "JWT_ACCESS_TOKEN_EXPIRATION" "3600000"
@@ -1135,19 +888,7 @@ jobs:
             set_env_if_empty ~/blogpress/setup-api/.env "LOG_LEVEL_MONGO" "INFO"
             set_env_if_empty ~/blogpress/setup-api/.env "DEVTOOLS_ENABLED" "false"
             set_env_if_empty ~/blogpress/setup-api/.env "JAVA_OPTS" "-Xms256m -Xmx512m"
-            set_env_if_empty ~/blogpress/setup-api/.env "API_PORT" "8090"
             set_env_if_empty ~/blogpress/setup-api/.env "DOCKERHUB_USERNAME" "azerty78"
-            
-            # Setup-Proxy
-            echo ""
-            echo "📦 Configuration setup-proxy/.env..."
-            set_env_if_empty ~/blogpress/setup-proxy/.env "NGINX_HTTP_PORT" "80"
-            set_env_if_empty ~/blogpress/setup-proxy/.env "NGINX_HTTPS_PORT" "443"
-            set_env_if_empty ~/blogpress/setup-proxy/.env "API_DOMAIN" "api.blogpress-app.com"
-            set_env_if_empty ~/blogpress/setup-proxy/.env "FRONTEND_DOMAIN" "www.blogpress-app.com"
-            set_env_if_empty ~/blogpress/setup-proxy/.env "CERTBOT_EMAIL" "admin@blogpress-app.com"
-            set_env_if_empty ~/blogpress/setup-proxy/.env "CERTBOT_MODE" "production"
-            set_env_if_empty ~/blogpress/setup-proxy/.env "DOCKERHUB_USERNAME" "azerty78"
             
             echo ""
             echo "✅ Fichiers .env mis à jour (valeurs existantes préservées)"
@@ -1187,51 +928,8 @@ jobs:
             echo "✅ Login Docker Hub réussi sur le VPS"
           EOF
       
-      # Étape 9: Déployer MongoDB (si pas déjà démarré)
-      - name: 🗄️ Deploy MongoDB
-        run: |
-          # Recréer le fichier de config SSH pour cette étape
-          mkdir -p ~/.ssh
-          cat > ~/.ssh/config << EOF
-          Host vps-deploy
-            HostName ${{ secrets.VPS_HOST }}
-            User ${{ secrets.VPS_USERNAME }}
-            Port ${{ secrets.VPS_PORT || 22 }}
-            StrictHostKeyChecking no
-            UserKnownHostsFile=/dev/null
-          EOF
-          chmod 600 ~/.ssh/config
-          
-          ssh -F ~/.ssh/config vps-deploy << 'EOF'
-            set -e
-            cd ~/blogpress/setup-db
-            
-            # Fonction pour déterminer la commande Docker à utiliser
-            get_docker_cmd() {
-              if docker ps &> /dev/null 2>&1; then
-                echo "docker"
-              else
-                echo "sudo docker"
-              fi
-            }
-            
-            DOCKER_CMD=$(get_docker_cmd)
-            
-            # Démarrer MongoDB si pas déjà démarré
-            $DOCKER_CMD compose up -d
-            
-            # Attendre que MongoDB soit prêt
-            echo "⏳ Attente que MongoDB soit prêt..."
-            sleep 10
-            
-            # Vérifier que MongoDB est en cours d'exécution
-            $DOCKER_CMD compose ps
-            
-            echo "✅ MongoDB déployé"
-          EOF
-      
-      # Étape 10: Déployer l'API
-      - name: 🔧 Deploy API
+      # Étape 9: Déployer MongoDB + API (profil prod)
+      - name: 🚀 Deploy MongoDB & API
         run: |
           # Recréer le fichier de config SSH pour cette étape
           mkdir -p ~/.ssh
@@ -1260,19 +958,19 @@ jobs:
             
             DOCKER_CMD=$(get_docker_cmd)
             
-            # Pull la nouvelle image
+            # Pull la nouvelle image API
             echo "📥 Pull de la nouvelle image API..."
-            $DOCKER_CMD compose pull
+            $DOCKER_CMD compose --profile prod pull
             
-            # Démarrer/Redémarrer l'API
-            echo "🚀 Démarrage de l'API..."
-            $DOCKER_CMD compose up -d --force-recreate
+            # Démarrer MongoDB + API
+            echo "🚀 Démarrage MongoDB + API (profil prod)..."
+            $DOCKER_CMD compose --profile prod up -d --force-recreate
             
-            # Attendre que l'API soit prête
-            echo "⏳ Attente que l'API soit prête..."
+            # Attendre que les services soient prêts
+            echo "⏳ Attente que les services soient prêts..."
             sleep 15
             
-            # Vérifier le health check
+            # Vérifier le health check API
             echo "🏥 Vérification du health check..."
             for i in {1..30}; do
               if curl -f http://localhost:8090/actuator/health 2>/dev/null; then
@@ -1286,58 +984,10 @@ jobs:
             # Nettoyer les anciennes images
             $DOCKER_CMD image prune -f
             
-            echo "✅ API déployée avec succès"
+            echo "✅ Déploiement MongoDB + API réussi"
           EOF
       
-      # Étape 11: Déployer Nginx
-      - name: 🌐 Deploy Nginx
-        run: |
-          # Recréer le fichier de config SSH pour cette étape
-          mkdir -p ~/.ssh
-          cat > ~/.ssh/config << EOF
-          Host vps-deploy
-            HostName ${{ secrets.VPS_HOST }}
-            User ${{ secrets.VPS_USERNAME }}
-            Port ${{ secrets.VPS_PORT || 22 }}
-            StrictHostKeyChecking no
-            UserKnownHostsFile=/dev/null
-          EOF
-          chmod 600 ~/.ssh/config
-          
-          ssh -F ~/.ssh/config vps-deploy << 'EOF'
-            set -e
-            cd ~/blogpress/setup-proxy
-            
-            # Fonction pour déterminer la commande Docker à utiliser
-            get_docker_cmd() {
-              if docker ps &> /dev/null 2>&1; then
-                echo "docker"
-              else
-                echo "sudo docker"
-              fi
-            }
-            
-            DOCKER_CMD=$(get_docker_cmd)
-            
-            # Pull la nouvelle image
-            echo "📥 Pull de la nouvelle image Nginx..."
-            $DOCKER_CMD compose pull
-            
-            # Démarrer/Redémarrer Nginx
-            echo "🚀 Démarrage de Nginx..."
-            $DOCKER_CMD compose up -d --force-recreate
-            
-            # Recharger Nginx pour appliquer les changements
-            sleep 5
-            $DOCKER_CMD exec blogpress-nginx nginx -s reload || echo "⚠️ Nginx reload non nécessaire"
-            
-            # Nettoyer les anciennes images
-            $DOCKER_CMD image prune -f
-            
-            echo "✅ Nginx déployé avec succès"
-          EOF
-      
-      # Étape 12: Vérification finale
+      # Étape 10: Vérification finale
       - name: ✅ Verify deployment
         run: |
           # Recréer le fichier de config SSH pour cette étape
@@ -1386,30 +1036,22 @@ jobs:
               echo "⚠️ API: En cours de démarrage"
             fi
             
-            # Health check Nginx
-            if $DOCKER_CMD exec blogpress-nginx nginx -t > /dev/null 2>&1; then
-              echo "✅ Nginx: OK"
-            else
-              echo "⚠️ Nginx: Erreur de configuration"
-            fi
-            
             echo ""
             echo "✅ Déploiement terminé!"
           EOF
 
   # ==========================================
-  # JOB 7: Create GitHub Release
+  # JOB 6: Create GitHub Release
   # ==========================================
   release:
     name: 🚀 Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [tags, build, build-nginx]
+    needs: [tags, build]
     if: |
       github.event_name != 'pull_request' && 
       github.ref == 'refs/heads/master' &&
       needs.tags.outputs.tag_created == 'true' &&
-      needs.build.result == 'success' &&
-      needs.build-nginx.result == 'success'
+      needs.build.result == 'success'
     
     steps:
       - name: 📥 Checkout code
@@ -1488,12 +1130,6 @@ jobs:
               echo "docker pull ${{ env.DOCKER_IMAGE }}:$TAG_NAME"
               echo "docker pull ${{ env.DOCKER_IMAGE }}:latest"
               echo "\`\`\`"
-              echo ""
-              echo "**Nginx:**"
-              echo "\`\`\`"
-              echo "docker pull ${{ env.NGINX_IMAGE }}:$TAG_NAME"
-              echo "docker pull ${{ env.NGINX_IMAGE }}:latest"
-              echo "\`\`\`"
             else
               echo "## $RELEASE_TYPE"
               echo ""
@@ -1509,11 +1145,6 @@ jobs:
               echo "\`\`\`"
               echo "docker pull ${{ env.DOCKER_IMAGE }}:$TAG_NAME"
               echo "\`\`\`"
-              echo ""
-              echo "**Nginx:**"
-              echo "\`\`\`"
-              echo "docker pull ${{ env.NGINX_IMAGE }}:$TAG_NAME"
-              echo "\`\`\`"
             fi
             echo ""
             echo "### 📝 Changements"
@@ -1521,7 +1152,6 @@ jobs:
             echo ""
             echo "### 🔗 Liens"
             echo "- **Docker Hub API:** https://hub.docker.com/r/${{ env.DOCKER_IMAGE }}"
-            echo "- **Docker Hub Nginx:** https://hub.docker.com/r/${{ env.NGINX_IMAGE }}"
             echo "- **Commit:** [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})"
             echo ""
             echo "---"

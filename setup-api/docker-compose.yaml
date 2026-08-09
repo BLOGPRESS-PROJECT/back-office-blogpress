@@ -1,70 +1,85 @@
+# ==========================================
+# BLOGPRESS - Docker Compose
+# ==========================================
+# Local (DB only) :
+#   docker compose up -d
+#
+# Production (API + DB) :
+#   docker compose --profile prod up -d
+# ==========================================
+
 services:
+  # ==========================================
+  # MONGODB (toujours démarré : local + prod)
+  # ==========================================
+  mongodb:
+    image: mongo:7.0
+    container_name: blogpress-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-qwerty87}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-blogpress}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongodb-data:/data/db
+      - mongodb-config:/data/configdb
+    networks:
+      - blogpress-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    command: ["--auth"]
+
+  # ==========================================
+  # API (uniquement avec --profile prod)
+  # ==========================================
   api:
-    # Utiliser l'image depuis Docker Hub (poussée par CI/CD)
-    image: ${DOCKERHUB_USERNAME:-azerty-78}/blogpress-api:latest
+    profiles: ["prod"]
+    image: ${DOCKERHUB_USERNAME:-azerty78}/blogpress-api:latest
     container_name: blogpress-api
     restart: unless-stopped
     ports:
       - "${API_PORT:-8090}:8090"
-
-    # Charger toutes les variables du .env
     env_file:
       - .env
-
-    # Variables d'environnement
     environment:
-      # Spring
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILE:-prod}
-
-      # URLs
       APP_BASE_URL: ${APP_BASE_URL}
       APP_FRONTEND_URL: ${APP_FRONTEND_URL}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
-
-      # MongoDB
-      SPRING_DATA_MONGODB_URI: ${SPRING_DATA_MONGODB_URI}
-      MONGO_AUTO_INDEX: ${MONGO_AUTO_INDEX}
-
-      # JWT
+      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-qwerty87}@mongodb:27017/${MONGO_DATABASE:-blogpress}?authSource=admin
+      MONGO_AUTO_INDEX: ${MONGO_AUTO_INDEX:-true}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION}
       JWT_REFRESH_TOKEN_EXPIRATION: ${JWT_REFRESH_TOKEN_EXPIRATION}
-
-      # Admin
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       ADMIN_USERNAME: ${ADMIN_USERNAME}
       ADMIN_FIRSTNAME: ${ADMIN_FIRSTNAME}
       ADMIN_LASTNAME: ${ADMIN_LASTNAME}
-
-      # File Storage
-      FILE_STORAGE_BASE_PATH: ${FILE_STORAGE_BASE_PATH}
+      FILE_STORAGE_BASE_PATH: /app/uploads
       FILE_STORAGE_MAX_FILE_SIZE: ${FILE_STORAGE_MAX_FILE_SIZE}
       FILE_STORAGE_ALLOWED_TYPES: ${FILE_STORAGE_ALLOWED_TYPES}
       MULTIPART_MAX_FILE_SIZE: ${MULTIPART_MAX_FILE_SIZE}
       MULTIPART_MAX_REQUEST_SIZE: ${MULTIPART_MAX_REQUEST_SIZE}
-
-      # Logging
       LOG_LEVEL_ROOT: ${LOG_LEVEL_ROOT}
       LOG_LEVEL_APP: ${LOG_LEVEL_APP}
       LOG_LEVEL_MONGO: ${LOG_LEVEL_MONGO}
-
-      # DevTools
-      DEVTOOLS_ENABLED: ${DEVTOOLS_ENABLED}
-
-      # Java
+      DEVTOOLS_ENABLED: ${DEVTOOLS_ENABLED:-false}
       JAVA_OPTS: ${JAVA_OPTS}
-
     volumes:
       - api-uploads:/app/uploads
       - api-logs:/app/logs
-
     networks:
       - blogpress-network
-
-    # Note: MongoDB doit être démarré avant (via setup-db)
-    # Le réseau blogpress-network doit exister (créé par setup-db)
-
+    depends_on:
+      mongodb:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8090/actuator/health"]
       interval: 30s
@@ -73,6 +88,12 @@ services:
       start_period: 90s
 
 volumes:
+  mongodb-data:
+    name: blogpress-mongodb-data
+    driver: local
+  mongodb-config:
+    name: blogpress-mongodb-config
+    driver: local
   api-uploads:
     name: blogpress-api-uploads
     driver: local
@@ -83,4 +104,4 @@ volumes:
 networks:
   blogpress-network:
     name: blogpress-network
-    external: true
+    driver: bridge
