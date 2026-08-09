@@ -268,7 +268,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=api
 
       - name: Trivy scan API (report only)
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.IMAGE_API }}:${{ needs.tag.outputs.docker_tag }}
           format: table
@@ -279,7 +279,7 @@ jobs:
 
       - name: Trivy SARIF API
         if: vars.ENABLE_CODE_SCANNING == 'true'
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.IMAGE_API }}:${{ needs.tag.outputs.docker_tag }}
           format: sarif
