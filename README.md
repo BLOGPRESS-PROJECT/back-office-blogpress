@@ -167,7 +167,7 @@ blogpress-api/
 ├── build.gradle.kts
 ├── settings.gradle.kts
 ├── setup-api/
-│   ├── docker-compose.yaml
+│   ├── compose.yaml
 │   └── Dockerfile
 └── README.md
 ```

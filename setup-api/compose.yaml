@@ -13,7 +13,7 @@ services:
   # MONGODB (toujours démarré : local + prod)
   # ==========================================
   mongodb:
-    image: mongo:7.0
+    image: mongo:7
     container_name: blogpress-mongodb
     restart: unless-stopped
     environment:

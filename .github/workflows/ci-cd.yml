@@ -42,7 +42,7 @@ env:
   JAVA_VERSION: "21"
   IMAGE_API: blogpress-api
   TRUFFLEHOG_VERSION: "3.95.3"
-  MONGO_IMAGE: mongo:7.0
+  MONGO_IMAGE: mongo:7
 
 jobs:
   tag:
@@ -114,7 +114,7 @@ jobs:
     needs: tag
     services:
       mongodb:
-        image: mongo:7.0
+        image: mongo:7
         ports:
           - 27017:27017
         options: >-

@@ -1,6 +1,6 @@
-# Chemins exclus du scan TruffleHog (filesystem)
-build/**
-.gradle/**
-.idea/**
-**/*.jar
-**/uploads/**
+# TruffleHog exclude paths — regex RE2 (une par ligne), pas de globs
+^build/
+^\.gradle/
+^\.idea/
+.*\.jar$
+(.*/)?uploads/
